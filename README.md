@@ -5,11 +5,15 @@
 [![Python](https://img.shields.io/pypi/pyversions/celljar.svg)](https://pypi.org/project/celljar/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Public battery cell test data, harmonized and sealed in one schema (Parquet + JSON).**
+**Open battery cell test data from 10 published sources, harmonized into one schema you can query in 3 lines.**
 
-celljar reads raw files from 9 published sources - ORNL Leaf, HNEI Kollmeyer, MATR (Severson 2019), CLO (Attia 2020), BILLS eVTOL, MOHTAT 2021, NASA PCoE, SNL Preger, Naumann - and writes them to a canonical schema with four entities: `cell_metadata` + `test_metadata` (JSON), `timeseries` + `cycle_summary` (Parquet). Query all sources via one SQL statement (DuckDB / pandas / Polars).
+If you have ever spent a week wrangling cycler exports from five different labs just to compare two aging curves, celljar is for you. We read the raw deposits, normalize them to a single canonical schema, preserve every authors' citation and license, and publish the result as Parquet + JSON. You query it like a single dataset.
 
-**Scope: harmonization only.** celljar focuses on measurements - unit conversion and schema normalization. It deliberately leaves fitting and modeling to downstream tools that specialize in those steps.
+Sources today: ORNL Leaf, HNEI Kollmeyer, MATR (Severson 2019), CLO (Attia 2020), BILLS eVTOL, MOHTAT 2021, NASA PCoE, SNL Preger, Naumann, KOLLMEYER 30T_AGING (Duque/Kollmeyer/Naguib fast-charge aging). 281 cells. 1,494 tests. 183 million timeseries rows. Every row joinable on `cell_id` / `test_id`.
+
+![celljar viewer](docs/CellJarViewer.png)
+
+> **Scope:** celljar is a HARMONIZATION layer. It converts units, normalizes the schema, and preserves provenance. It does NOT fit `R_DC`, dV/dQ, OCV, or ECM parameters from V/I/T - those are downstream-tool concerns (PyBOP, equiv-circ-model, custom fitters). The boundary is enforced in the schema via `*_method` fields that document where every derived number came from.
 
 ## Quick start
 
@@ -43,27 +47,40 @@ Pin a release for reproducibility: `CELLJAR_HF_REVISION=v0.2.1 streamlit run app
 | Source | Chemistry | Cells | Test types | Raw data |
 |---|---|---|---|---|
 | ORNL Leaf 2013 | mixed (LMO/NCA pouch) | 1 | HPPC × 3 temperatures | bundled |
-| HNEI (Kollmeyer) | NCA (Panasonic NCR18650PF) | 1 | HPPC, drive cycle, capacity_check, cycle_aging | [download](data/raw/hnei/SOURCE_DATA_PROVENANCE.md) |
-| MATR (Severson 2019) | LFP (A123 18650) | 119 | Cycling-to-failure | [download](data/raw/matr/SOURCE_DATA_PROVENANCE.md) |
-| CLO (Attia 2020) | LFP (A123 18650) | 45 | Cycling, BO-optimized fast-charge | [download](data/raw/clo/SOURCE_DATA_PROVENANCE.md) |
-| BILLS / eVTOL (Bills 2023) | NMC (Sony US18650VTC6) | 22 | Drive cycle (flight-duty) + RPTs | [download](data/raw/bills/SOURCE_DATA_PROVENANCE.md) |
-| MOHTAT (Mohtat 2021) | NMC (UMich NMC532 pouch) | 31 | Cycle aging + synchronous expansion | [download](data/raw/mohtat/SOURCE_DATA_PROVENANCE.md) |
-| NASA PCoE | LCO (vendor undisclosed, 2.0 Ah 18650) | 34 | Cycle aging | [download](data/raw/nasa_pcoe/SOURCE_DATA_PROVENANCE.md) |
-| SNL Preger 2020 | LFP / NMC / NCA grid (18650) | 87 | Cycle aging across T × DoD × C-rate | [download](data/raw/snl_preger/SOURCE_DATA_PROVENANCE.md) |
-| Naumann 2018/2020 | LFP / graphite | 17 calendar + 17 cycle | Calendar + cycle aging (summary-only) | [download](data/raw/naumann/SOURCE_DATA_PROVENANCE.md) |
+| HNEI (Kollmeyer 18650PF) | NCA (Panasonic NCR18650PF) | 1 | HPPC, drive cycle, qOCV, capacity check | [download](data/raw/hnei/SOURCE_DATA_PROVENANCE.md) |
+| MATR (Severson 2019) | LFP (A123 18650) | 135 | Cycling-to-failure under 72 fast-charge policies | [download](data/raw/matr/SOURCE_DATA_PROVENANCE.md) |
+| CLO (Attia 2020) | LFP (A123 18650) | 45 | Closed-loop BO-optimized fast-charge cycling | [download](data/raw/clo/SOURCE_DATA_PROVENANCE.md) |
+| BILLS / eVTOL (Bills 2023) | NMC (Sony US18650VTC6) | 22 | eVTOL mission profile + periodic RPTs | [download](data/raw/bills/SOURCE_DATA_PROVENANCE.md) |
+| MOHTAT (Mohtat 2021) | NMC (UMich NMC532 pouch) | 31 | Cycle aging + synchronous Keyence laser expansion | [download](data/raw/mohtat/SOURCE_DATA_PROVENANCE.md) |
+| NASA PCoE | LCO (vendor undisclosed, 2.0 Ah 18650) | 34 | Cycle aging with EIS-interleaved checkups | [download](data/raw/nasa_pcoe/SOURCE_DATA_PROVENANCE.md) |
+| SNL Preger 2020 | LFP / NMC / NCA grid (18650) | 87 | Cycle aging across T × DoD × C-rate matrix | [download](data/raw/snl_preger/SOURCE_DATA_PROVENANCE.md) |
+| Naumann 2018/2020 | LFP / graphite (Sony US26650FTC1) | 17 calendar + 17 cycle | Calendar + cycle aging (summary-only, R_DC published) | [download](data/raw/naumann/SOURCE_DATA_PROVENANCE.md) |
+| KOLLMEYER 30T_AGING (Duque 2025) | NMC (Samsung INR21700-30T) | 6 | 15-min fast-charge aging across 5 protocols (CC, BC, BCR, BCNP, BCNP_1s) | [download](data/raw/KOLLMEYER_30T_AGING/) |
+| KOLLMEYER 30T (BOL) | NMC (Samsung INR21700-30T) | 1 | HPPC, drive cycles, qOCV, capacity check | [download](data/raw/KOLLMEYER_30T/SOURCE_DATA_PROVENANCE.md) |
+| KOLLMEYER HG2 (BOL) | NMC (LG INR18650-HG2) | 1 | HPPC, drive cycles, qOCV, capacity check | [download](data/raw/KOLLMEYER_HG2/SOURCE_DATA_PROVENANCE.md) |
 
 ## Schema
 
-Four entities joined by `cell_id` and `test_id`:
+Four entities joined by `cell_id`, `test_id`, and optionally `checkup_id`:
 
 ```
 cell_metadata.json       hardware (chemistry, capacity, form factor)
-test_metadata.json       protocol, SOH, provenance, license
+test_metadata.json       protocol, SOH, SOC, provenance, license, checkup_id
 timeseries.parquet       V / I / T per-sample + signed running coulomb count (∫I dt)
-cycle_summary.parquet    per-cycle aggregates (capacity, R_DC, …) for aging studies
+cycle_summary.parquet    per-cycle aggregates (capacity, R_DC, ...) for aging studies
 ```
 
-**Conventions:** SI units. Timestamps relative. Missing data is explicit `null`. Current is positive = charge (into the cell), negative = discharge.
+**Conventions:** SI units. Timestamps relative. Missing data is explicit `null`. Current sign matches the source's own convention - look at each source's harmonizer notes for confirmation (most are positive = charge / negative = discharge).
+
+**Provenance is first-class.** Every test row carries `source_doi`, `source_citation`, `source_license`. Every derived quantity carries a `*_method` tag:
+
+| Field | Tag | Meaning |
+|---|---|---|
+| `soh_pct` | `soh_method` | `capacity_vs_first_checkpoint`, `bol_assumption`, or null |
+| `soc_range_min/max` | `soc_method` | `coulomb_count` (computed with clip), `protocol_asserted` (hardcoded from doc), `source_published` (source ships it), or null |
+| `resistance_dc_ohm` | `resistance_method` | `source_published` or null. celljar never fits R from V/I/T - that lives downstream |
+
+`checkup_id` groups test segments that belong to the same source-defined Reference Performance Test (RPT) block (currently used by KOLLMEYER 30T_AGING). Null for sources without RPT structure.
 
 Authoritative field list + types in [`schemas/`](schemas/) (JSON Schema). Pandera mirrors at runtime in [`celljar/harmonize/harmonize_schema.py`](celljar/harmonize/harmonize_schema.py).
 
@@ -86,11 +103,15 @@ WHERE test_type = 'hppc' AND temperature_C_min = 25;
 
 Same patterns from Python via `duckdb.sql(...).df()` or `pl.read_parquet(..., filters=[...])`.
 
-## Use cases
+## What you can do with it
 
-Parameterization · modeling · aging studies · cross-source analysis.
+- **Parameterize an ECM / SPM / DFN model** - V/I/T at 1 Hz across every source, with HPPC and qOCV characterization data already harmonized into a consistent shape
+- **Run a cross-source SOH / RUL study** - put 6 datasets on the same capacity-vs-cycle axis with one query
+- **Compare fast-charge protocols** - MATR (LFP, 72 policies), CLO (LFP, BO-optimized), KOLLMEYER aging (NMC, 5 protocols) all sit alongside each other
+- **Build a degradation-mode tracker** - HPPC + qOCV at periodic checkups in Kollmeyer aging let you separate LAM / LLI / impedance growth as a cell ages
+- **Benchmark your model on real published data** - every test carries a DOI and citation, so reviewer questions about provenance are pre-answered
 
-**Out of scope:** field/fleet telemetry; ML cycling-life prediction (use [BatteryLife (KDD 2025)](https://github.com/Ruifeng-Tan/BatteryLife) - 990 cells, 18 baselines). OCV/R0 extractors, ECM/SPM/DFN fitting, ML modeling all live in separate companion repos.
+**Out of scope:** field / fleet telemetry; ML lifetime prediction (use [BatteryLife (KDD 2025)](https://github.com/Ruifeng-Tan/BatteryLife) - 990 cells, 18 baselines). OCV / R0 extractors, ECM / SPM / DFN fitting, ML modeling all live in separate downstream tools.
 
 ## How this relates to other battery data tools
 
