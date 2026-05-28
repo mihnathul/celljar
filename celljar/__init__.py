@@ -6,4 +6,4 @@ schema-validated data for downstream fitting, modeling, simulation, and/or
 analysis.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
