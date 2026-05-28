@@ -11,6 +11,8 @@ protocol and add it to `get_provider()`.
 Env vars:
     CELLJAR_LOCAL=1               read from data/harmonized/ (dev mode)
     CELLJAR_HF_REVISION=v0.2.1    pin HF backend to a specific tag/commit/branch
+    CELLJAR_DEBUG=1               print cache-miss lines + show mtime panel in
+                                  the sidebar (dev only)
 """
 
 from __future__ import annotations
@@ -28,6 +30,13 @@ import streamlit as st
 HARMONIZED = Path(__file__).parent.parent / "data" / "harmonized"
 HF_REPO = "mihnathul/celljar"
 HF_REVISION = os.environ.get("CELLJAR_HF_REVISION", "main")
+DEBUG = os.environ.get("CELLJAR_DEBUG") == "1"
+
+
+def _dbg(msg: str) -> None:
+    """Print cache-miss / dev-trace lines when CELLJAR_DEBUG=1."""
+    if DEBUG:
+        print(f"[celljar-debug] {msg}", flush=True)
 USE_LOCAL = os.environ.get("CELLJAR_LOCAL", "").lower() in ("1", "true", "yes")
 HF_BASE = f"https://huggingface.co/datasets/{HF_REPO}/resolve/{HF_REVISION}"
 
@@ -141,31 +150,42 @@ def ensure_metadata() -> tuple[bool, str | None]:
 
 
 def data_mtime() -> float:
-    """Aggregate mtime of harmonized data so caches auto-invalidate when files change."""
-    paths = [
-        HARMONIZED / "timeseries.parquet",
-        HARMONIZED / "cycle_summary.parquet",
-        HARMONIZED / "cells",
-        HARMONIZED / "tests",
-    ]
-    mtimes = [p.stat().st_mtime for p in paths if p.exists()]
+    """Aggregate mtime of harmonized data so caches auto-invalidate when files change.
+
+    For the cells/ and tests/ directories we take the max mtime over the JSON
+    FILES, not the directory's own mtime. A directory's mtime only bumps when
+    entries are added/removed/renamed - NOT when an existing file is overwritten
+    in place (which is exactly what re-running demo_end_to_end.py does). Using
+    the directory mtime alone meant the cache key never changed on a content
+    re-write, so the viewer served stale DataFrames after a re-harmonize.
+    """
+    mtimes: list[float] = []
+    for f in (HARMONIZED / "timeseries.parquet", HARMONIZED / "cycle_summary.parquet"):
+        if f.exists():
+            mtimes.append(f.stat().st_mtime)
+    for d in (HARMONIZED / "cells", HARMONIZED / "tests"):
+        if d.exists():
+            mtimes.extend(f.stat().st_mtime for f in d.glob("*.json"))
     return max(mtimes) if mtimes else 0.0
 
 
 # --- Cached loaders ---------------------------------------------------------
 
 @st.cache_data
-def load_cells(_mtime: float = 0.0) -> pd.DataFrame:
+def load_cells(mtime: float = 0.0) -> pd.DataFrame:
+    _dbg(f"cache MISS load_cells mtime={mtime}")
     return pd.DataFrame([json.load(open(p)) for p in (HARMONIZED / "cells").glob("*.json")])
 
 
 @st.cache_data
-def load_tests(_mtime: float = 0.0) -> pd.DataFrame:
+def load_tests(mtime: float = 0.0) -> pd.DataFrame:
+    _dbg(f"cache MISS load_tests mtime={mtime}")
     return pd.DataFrame([json.load(open(p)) for p in (HARMONIZED / "tests").glob("*.json")])
 
 
 @st.cache_data
-def load_timeseries(test_id: str, _mtime: float = 0.0) -> pd.DataFrame:
+def load_timeseries(test_id: str, mtime: float = 0.0) -> pd.DataFrame:
+    _dbg(f"cache MISS load_timeseries test_id={test_id} mtime={mtime}")
     uri = get_provider().timeseries_uri()
     return duckdb.sql(
         f"SELECT * FROM '{uri}' WHERE test_id = '{test_id}' ORDER BY timestamp_s"
@@ -173,16 +193,25 @@ def load_timeseries(test_id: str, _mtime: float = 0.0) -> pd.DataFrame:
 
 
 @st.cache_data
-def load_cycle_summary_for_tests(test_ids_tuple: tuple, _mtime: float = 0.0) -> pd.DataFrame:
-    """cycle_summary rows for the given test_ids. Empty DF if file missing or no rows."""
+def load_cycle_summary_for_tests(test_ids_tuple: tuple, mtime: float = 0.0) -> pd.DataFrame:
+    """cycle_summary rows for the given test_ids. Empty DF if file missing or no rows.
+
+    Uses pyarrow rather than DuckDB to avoid `NotImplementedException: PlainSkip
+    not implemented` on Parquet files written with newer Polars / Parquet 2.0
+    encodings. cycle_summary is small (<10k rows) so a full read + filter is
+    fast enough and removes one source of version-compat breakage.
+    """
     if not test_ids_tuple:
         return pd.DataFrame()
-    uri = get_provider().cycle_summary_uri()
-    placeholders = ",".join(f"'{tid}'" for tid in test_ids_tuple)
-    try:
-        return duckdb.sql(
-            f"SELECT * FROM '{uri}' WHERE test_id IN ({placeholders})"
-        ).df()
-    except duckdb.IOException:
-        # cycle_summary.parquet may not exist (some sources don't emit it)
+    _dbg(f"cache MISS load_cycle_summary_for_tests n_tests={len(test_ids_tuple)} mtime={mtime}")
+    # cycle_summary.parquet is small (<10k rows) and downloaded locally in
+    # both local + HF modes (snapshot_download includes it). Read from the
+    # local path with pyarrow directly so we avoid the DuckDB Parquet 2.0
+    # encoding issue (NotImplementedException: PlainSkip) on Polars-written
+    # files.
+    local_path = HARMONIZED / "cycle_summary.parquet"
+    if not local_path.exists():
         return pd.DataFrame()
+    import pyarrow.parquet as pq
+    table = pq.read_table(local_path, filters=[("test_id", "in", list(test_ids_tuple))])
+    return table.to_pandas()
