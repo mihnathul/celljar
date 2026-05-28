@@ -166,6 +166,7 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 5.0) -> dict:
             "soc_range_min": None,
             "soc_range_max": None,
             "soc_step": None,
+            "soc_method": None,
             "c_rate_charge": None,         # varies per cell in the aging matrix
             "c_rate_discharge": None,
             "protocol_description": _PROTOCOL_DESCRIPTION,
@@ -174,6 +175,7 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 5.0) -> dict:
             "soh_pct": None,
             "soh_method": None,
             "cycle_count_at_test": 0,
+            "checkup_id": None,
             "test_year": 2018,
             "n_samples": int(n),
             "duration_s": float(time_s.max() - time_s.min()) if n else 0.0,
@@ -186,6 +188,9 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 5.0) -> dict:
             "sample_dt_min_s": float(max(0.0, np.min(sample_dt))) if len(sample_dt) else None,
             "sample_dt_median_s": float(np.median(sample_dt)) if len(sample_dt) else None,
             "sample_dt_max_s": float(np.max(sample_dt)) if len(sample_dt) else None,
+            # Mohtat logs current + displacement but no running coulomb count.
+            "coulomb_count_observed_min_Ah": None,
+            "coulomb_count_observed_max_Ah": None,
             **_SOURCE_PROVENANCE,
         })
 

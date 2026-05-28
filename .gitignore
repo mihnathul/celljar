@@ -44,6 +44,13 @@ data/raw/**/*.hdf5
 data/raw/**/*.zip
 data/raw/**/*.parquet
 data/raw/**/*.txt
+# Upstream docs / example scripts that ship with some deposits (Kollmeyer
+# 30T / HG2 PDFs, MATLAB live scripts, slide decks, download logs). Same
+# policy as the rest of data/raw: download-on-demand, not committed.
+data/raw/**/*.pdf
+data/raw/**/*.mlx
+data/raw/**/*.pptx
+data/raw/**/*.log
 
 # ORNL Leaf is the one bundled source — un-ignore its CSVs
 !data/raw/ornl_leaf/*.csv

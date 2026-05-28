@@ -152,6 +152,7 @@ def build_test_metadata(test_id: str, df: pl.DataFrame, temp_c: float) -> dict:
         "soc_range_min": 0.0,
         "soc_range_max": 1.0,
         "soc_step": 0.1,
+        "soc_method": "protocol_asserted",
         "c_rate_charge": None,
         "c_rate_discharge": None,
         "protocol_description": "Low-current HPPC with 10% SOC steps",
@@ -159,6 +160,7 @@ def build_test_metadata(test_id: str, df: pl.DataFrame, temp_c: float) -> dict:
         "soh_pct": 100.0,                         # BOL assumption - fresh cell
         "soh_method": "bol_assumption",
         "cycle_count_at_test": 0,
+        "checkup_id": None,
         "test_year": 2013,
         # Observed data summary
         "n_samples": int(len(df)),
@@ -172,6 +174,14 @@ def build_test_metadata(test_id: str, df: pl.DataFrame, temp_c: float) -> dict:
         "sample_dt_min_s": float(max(0.0, np.min(sample_dt))) if len(sample_dt) else None,
         "sample_dt_median_s": float(np.median(sample_dt)) if len(sample_dt) else None,
         "sample_dt_max_s": float(np.max(sample_dt)) if len(sample_dt) else None,
+        "coulomb_count_observed_min_Ah": (
+            float(np.nanmin(df["coulomb_count_Ah"].to_numpy()))
+            if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+        ),
+        "coulomb_count_observed_max_Ah": (
+            float(np.nanmax(df["coulomb_count_Ah"].to_numpy()))
+            if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+        ),
         **_SOURCE_PROVENANCE,
     }
 

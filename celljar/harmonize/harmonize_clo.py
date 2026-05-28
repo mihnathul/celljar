@@ -203,6 +203,7 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 1.1) -> dict:
             "soc_range_min": None,
             "soc_range_max": None,
             "soc_step": None,
+            "soc_method": None,
             "c_rate_charge": c_rate_charge,
             "c_rate_discharge": 4.0,                   # 4C CC-CV discharge, all CLO cells
             "protocol_description": (
@@ -218,6 +219,7 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 1.1) -> dict:
             "soh_pct": None,
             "soh_method": None,                        # scalar SOH not meaningful over a cycling test
             "cycle_count_at_test": 0,                  # test starts from BOL (fresh cell)
+            "checkup_id": None,
             "test_year": 2018,
             "n_samples": int(len(df)),
             "duration_s": float(df["timestamp_s"].max() - df["timestamp_s"].min()),
@@ -230,6 +232,14 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 1.1) -> dict:
             "sample_dt_min_s": float(max(0.0, np.min(sample_dt))) if len(sample_dt) else None,
             "sample_dt_median_s": float(np.median(sample_dt)) if len(sample_dt) else None,
             "sample_dt_max_s": float(np.max(sample_dt)) if len(sample_dt) else None,
+            "coulomb_count_observed_min_Ah": (
+                float(np.nanmin(df["coulomb_count_Ah"].to_numpy()))
+                if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+            ),
+            "coulomb_count_observed_max_Ah": (
+                float(np.nanmax(df["coulomb_count_Ah"].to_numpy()))
+                if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+            ),
             **_SOURCE_PROVENANCE,
         })
 
