@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "celljar"
 version = "0.3.0"
-description = "Public battery cell test data, harmonized and sealed in one schema (Parquet + JSON)."
+description = "Public battery cell test datasets, harmonized into a canonical schema, with timeseries data in Parquet for easy query."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"

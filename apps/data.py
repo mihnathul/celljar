@@ -10,7 +10,7 @@ protocol and add it to `get_provider()`.
 
 Env vars:
     CELLJAR_LOCAL=1               read from data/harmonized/ (dev mode)
-    CELLJAR_HF_REVISION=v0.2.1    pin HF backend to a specific tag/commit/branch
+    CELLJAR_HF_REVISION=v0.3.0    pin HF backend to a specific tag/commit/branch
     CELLJAR_DEBUG=1               print cache-miss lines + show mtime panel in
                                   the sidebar (dev only)
 """

@@ -12,12 +12,14 @@ Requires:
 from pathlib import Path
 import argparse
 import json
+import re
 import sys
 
 from huggingface_hub import HfApi, create_repo
 
 ROOT = Path(__file__).parent.parent
 HARMONIZED = ROOT / "data" / "harmonized"
+README = ROOT / "README.md"
 HF_REPO = "mihnathul/celljar"
 GH_REPO = "https://github.com/mihnathul/celljar"
 
@@ -94,7 +96,12 @@ def verify_data() -> dict:
     }
 
 
-from celljar.bundle import collect_sources as _collect_sources_impl, timeseries_row_count as _timeseries_row_count_impl   # noqa: E402
+from celljar.bundle import (   # noqa: E402
+    collect_sources as _collect_sources_impl,
+    timeseries_row_count as _timeseries_row_count_impl,
+    collect_datasets as _collect_datasets_impl,
+    sync_readme_text,
+)
 
 
 def _collect_sources() -> dict:
@@ -103,37 +110,6 @@ def _collect_sources() -> dict:
 
 def _timeseries_row_count() -> int:
     return _timeseries_row_count_impl(HARMONIZED)
-
-
-def build_schema_section() -> str:
-    """Generate the entity-summary block by reading schemas/*.schema.json.
-
-    Replaces the previous hand-curated bullet list (which drifted from the real
-    schema). One source of truth: schemas/*.schema.json → both the README and
-    the HF dataset card render the same field set.
-    """
-    schemas_dir = ROOT / "schemas"
-    entities = [
-        ("cell_metadata", "JSON, one file per cell"),
-        ("test_metadata", "JSON, one file per test"),
-        ("timeseries", "Parquet, one row per measurement sample"),
-        ("cycle_summary", "Parquet, one row per cycle / aging checkpoint"),
-    ]
-    lines = []
-    for entity_name, blurb in entities:
-        path = schemas_dir / f"{entity_name}.schema.json"
-        if not path.exists():
-            continue
-        spec = json.loads(path.read_text())
-        props = list(spec.get("properties", {}).keys())
-        required = set(spec.get("required", []))
-        # Mark required fields with a *.
-        field_list = ", ".join(f"`{p}`*" if p in required else f"`{p}`" for p in props)
-        lines.append(f"- **`{entity_name}`** ({blurb}) - {field_list}")
-    lines.append("")
-    lines.append("`*` = required field (others nullable). See "
-                 f"[JSON Schemas]({GH_REPO}/tree/main/schemas) for full type info, enum values, and constraints.")
-    return "\n".join(lines)
 
 
 def build_frontmatter(sources: dict) -> str:
@@ -161,201 +137,37 @@ source_datasets:
 ---"""
 
 
-def build_source_citations(sources: dict) -> str:
-    """Per-source citation markdown block (DOI, license, URL per dataset)."""
-    if not sources:
-        return "_No sources discovered in the harmonized bundle._"
-
-    chunks = []
-    for src in sorted(sources):
-        meta = sources[src]
-        citation = (meta.get("citation") or "(citation unavailable in harmonized bundle)").strip()
-        lic = meta.get("license") or "see upstream"
-        lic_url = meta.get("license_url")
-        url = meta.get("url")
-        doi = meta.get("doi")
-
-        lines = [f"### {src}", "", f"> {citation}", ""]
-        meta_bits = [f"**License:** {lic}"]
-        if lic_url:
-            meta_bits.append(f"[license terms]({lic_url})")
-        if url:
-            meta_bits.append(f"[dataset]({url})")
-        if doi:
-            meta_bits.append(f"DOI: `{doi}`")
-        lines.append(" · ".join(meta_bits))
-        chunks.append("\n".join(lines))
-    return "\n\n".join(chunks)
+_CARD_SKIP = re.compile(r"<!-- CARD:SKIP:START -->.*?<!-- CARD:SKIP:END -->", re.DOTALL)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_BLANK_RUN = re.compile(r"\n{3,}")
 
 
-def build_card_body(
-    sources: dict,
-    n_cells: int,
-    n_tests: int,
-    n_rows: int,
-    per_source_block: str,
-) -> str:
-    """Main markdown body of the HF dataset card."""
-    source_list_inline = ", ".join(f"`{s}`" for s in sorted(sources)) or "_(none)_"
-    n_rows_str = f"**{n_rows:,} timeseries rows**" if n_rows >= 0 else "timeseries rows: see parquet"
-    schema_block = build_schema_section()
+def _readme_to_card_body(readme: str) -> str:
+    """The HF card body is the README with the repo-only sections removed.
 
-    return f"""# celljar
-
-**Public battery cell test data, harmonized and sealed in one schema (Parquet + JSON).**
-
-celljar reads raw files from published sources and writes them into one
-canonical schema across four entities: `cell_metadata` + `test_metadata`
-(JSON), `timeseries` + `cycle_summary` (Parquet). Consumers read one format
-instead of writing per-source loaders.
-
-**Scope: harmonization only.** celljar focuses on measurements - unit
-conversion and schema normalization. It deliberately leaves fitting and
-modeling to downstream tools that specialize in those steps.
-
-- Upstream code / issue tracker: <{GH_REPO}>
-- Sources in this snapshot: {source_list_inline}
-- Contents: **{n_cells} cells**, **{n_tests} tests**, {n_rows_str}
-
-## Files
-
-```
-cells/*.json              # one file per cell (hardware metadata)
-tests/*.json              # one file per test (protocol + provenance + observed stats)
-timeseries.parquet        # all tests' V/I/T samples; join on test_id
-cycle_summary.parquet     # per-cycle aggregates (aging studies); join on (test_id, cycle_number)
-```
-
-## Schema (overview)
-
-Four entities; field list generated from the authoritative [JSON Schemas]({GH_REPO}/tree/main/schemas):
-
-{schema_block}
-
-SI units. Relative timestamps. Missing data is explicit `null` (no NaN
-sentinels). Current sign convention: positive = charge (into the cell),
-negative = discharge.
-
-Join keys: `cells.cell_id = tests.cell_id`, `tests.test_id = timeseries.test_id`,
-`(tests.test_id, cycle_number) = cycle_summary.(test_id, cycle_number)`.
-
-## Download the whole bundle
-
-```bash
-# CLI - pulls everything (cells/*.json, tests/*.json, timeseries.parquet, cycle_summary.parquet)
-pip install huggingface_hub
-huggingface-cli download {HF_REPO} --repo-type dataset --local-dir ./celljar-bundle
-
-# Pin a tagged release for reproducibility
-huggingface-cli download {HF_REPO} --repo-type dataset --revision v0.2.1 --local-dir ./celljar-bundle
-```
-
-Or in Python:
-
-```python
-from huggingface_hub import snapshot_download
-local = snapshot_download(repo_id="{HF_REPO}", repo_type="dataset", revision="v0.2.1")
-print(local)  # local path containing cells/, tests/, timeseries.parquet, cycle_summary.parquet
-```
-
-## Query in place - no download needed
-
-### DuckDB - full SQL across all entities over HTTPS
-
-```sql
-INSTALL httpfs; LOAD httpfs;
-SELECT c.chemistry, c.nominal_capacity_Ah,
-       t.test_id, t.test_type, t.soh_pct,
-       COUNT(*) AS n_samples
-FROM read_json('https://huggingface.co/datasets/{HF_REPO}/resolve/main/cells/*.json')  c
-JOIN read_json('https://huggingface.co/datasets/{HF_REPO}/resolve/main/tests/*.json')  t
-  ON c.cell_id = t.cell_id
-JOIN 'https://huggingface.co/datasets/{HF_REPO}/resolve/main/timeseries.parquet'       ts
-  ON t.test_id = ts.test_id
-GROUP BY 1,2,3,4,5
-ORDER BY t.test_id;
-```
-
-### pandas / Polars - predicate-pushdown read of one test
-
-```python
-import pandas as pd
-df = pd.read_parquet(
-    "https://huggingface.co/datasets/{HF_REPO}/resolve/main/timeseries.parquet",
-    filters=[("test_id", "==", "ORNL_LEAF_2013_HPPC_25C")],
-)
-```
-
-### `datasets` library - streaming
-
-```python
-from datasets import load_dataset
-ds = load_dataset(
-    "parquet",
-    data_files="https://huggingface.co/datasets/{HF_REPO}/resolve/main/timeseries.parquet",
-    split="train",
-    streaming=True,
-)
-for row in ds.take(5):
-    print(row)
-```
-
-## License & citation
-
-The science here belongs to the original authors; celljar simply puts their
-data in one place with a shared schema. Please cite their papers when you use
-the data, and, if it's helpful, celljar alongside.
-
-- **This harmonized bundle** (packaging, schema, derived test-metadata fields):
-  [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
-- **Upstream raw data** retains each publisher's original license - listed
-  per-source below. Each source's license terms apply when you use its tests.
-
-To make attribution easy, every `tests/*.json` row carries its own
-`source_doi`, `source_citation`, `source_license`, and `source_license_url`
-fields, so you can pull references for any analysis with one query.
-
-## Per-source citations
-
-{per_source_block}
-
-## Citing celljar
-
-If you'd like to cite celljar:
-
-```bibtex
-@software{{celljar,
-  author = {{Mihna Neerulpan}},
-  title  = {{celljar: Public Battery Test Dataset Harmonization with a Canonical Schema}},
-  year   = {{2026}},
-  url    = {{{GH_REPO}}},
-}}
-```
-
-## Links
-
-- Code: <{GH_REPO}>
-- Issues / new-source requests: <{GH_REPO}/issues>
-- Canonical JSON Schemas: <{GH_REPO}/tree/main/schemas>
-"""
+    Strips every <!-- CARD:SKIP:START -->...<!-- CARD:SKIP:END --> region
+    (badges, Develop locally, Contributing), drops the now-empty HTML-comment
+    markers (incl. the generated-region markers), and collapses the blank-line
+    runs they leave behind.
+    """
+    body = _CARD_SKIP.sub("", readme)
+    body = _HTML_COMMENT.sub("", body)
+    body = _BLANK_RUN.sub("\n\n", body)
+    return body.strip()
 
 
 def build_dataset_card() -> str:
-    """Compose the HF dataset card README from harmonized output.
-
-    Three pieces glued together: YAML frontmatter, markdown body, per-source
-    citations. Each piece is its own function so they can be edited / tested
-    independently and stay in sync with the README/schema.
+    """Compose the HF dataset card: YAML frontmatter + the README body with the
+    repo-only sections stripped. The README is the single source of truth; its
+    generated regions (datasets table, contents line) are refreshed in memory
+    here so the card is current even if README.md on disk is stale.
     """
     sources = _collect_sources()
-    n_cells = len(list((HARMONIZED / "cells").glob("*.json")))
-    n_tests = len(list((HARMONIZED / "tests").glob("*.json")))
-    n_rows = _timeseries_row_count()
+    active = {d["source"] for d in _collect_datasets_impl(HARMONIZED)}
+    sources = {s: v for s, v in sources.items() if s in active}
 
-    frontmatter = build_frontmatter(sources)
-    citations = build_source_citations(sources)
-    body = build_card_body(sources, n_cells, n_tests, n_rows, citations)
-    return f"{frontmatter}\n\n{body}"
+    readme = sync_readme_text(README.read_text(), HARMONIZED)
+    return f"{build_frontmatter(sources)}\n\n{_readme_to_card_body(readme)}"
 
 
 def main():
@@ -368,7 +180,7 @@ def main():
     parser.add_argument(
         "--revision",
         default=None,
-        help="Optional tag to create on the dataset after upload (e.g. v0.2.1).",
+        help="Optional tag to create on the dataset after upload (e.g. v0.3.0).",
     )
     args = parser.parse_args()
 

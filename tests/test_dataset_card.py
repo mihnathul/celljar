@@ -1,10 +1,10 @@
-"""Smoke test for the HuggingFace dataset card generator.
+"""Tests for the HuggingFace dataset card generator.
 
-Catches schema-vs-card drift: if `schemas/*.schema.json` adds/renames a field,
-the card section should reflect it (since it's generated from the schemas).
-This was an actual P1 bug pre-v0.2 - the card hand-restated 3 entities while
-the schema had 4, plus a broken f-string. Pinning a few invariants here so it
-doesn't regress.
+Architecture (post-refactor): the README is the single source of truth. The HF
+card is the README with the repo-only sections (marked <!-- CARD:SKIP -->)
+removed, plus YAML frontmatter. The datasets table and contents line are
+generated from the bundle by celljar.bundle and injected into both. These tests
+pin the invariants so card/README/schema can't silently drift.
 """
 
 from __future__ import annotations
@@ -18,29 +18,15 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 
 # Skip gracefully if huggingface_hub isn't installed (e.g. minimal CI).
-huggingface_hub = pytest.importorskip("huggingface_hub")
+pytest.importorskip("huggingface_hub")
 from publish_to_huggingface import (  # noqa: E402
-    build_card_body,
+    HARMONIZED,
+    README,
     build_dataset_card,
     build_frontmatter,
-    build_schema_section,
-    build_source_citations,
+    _readme_to_card_body,
 )
-
-
-def test_schema_section_lists_all_4_entities():
-    """The generated schema section must mention every entity in schemas/."""
-    section = build_schema_section()
-    for entity in ("cell_metadata", "test_metadata", "timeseries", "cycle_summary"):
-        assert f"`{entity}`" in section, f"schema section missing entity: {entity}"
-
-
-def test_schema_section_marks_required_fields():
-    """Required fields should be marked with *."""
-    section = build_schema_section()
-    # cell_id is required in cell_metadata, test_metadata, timeseries, cycle_summary.
-    # Marker must appear at least once.
-    assert "`cell_id`*" in section, "required-field asterisk marker missing"
+from celljar.bundle import collect_datasets, render_dataset_table, sync_readme_text  # noqa: E402
 
 
 def test_frontmatter_is_valid_yaml():
@@ -48,44 +34,67 @@ def test_frontmatter_is_valid_yaml():
     front = build_frontmatter({"ORNL": {}, "HNEI": {}})
     assert front.startswith("---")
     assert front.endswith("---")
-    # Sources are listed as lowercase tags
+    # Sources are listed as lowercase tags.
     assert "  - ornl" in front
     assert "  - hnei" in front
 
 
-def test_source_citations_lists_each_source():
-    sources = {
-        "ORNL": {"citation": "ORNL cite", "license": "MIT", "doi": "10.1/ornl"},
-        "HNEI": {"citation": "HNEI cite", "license": "CC-BY-4.0"},
-    }
-    block = build_source_citations(sources)
-    assert "### ORNL" in block
-    assert "### HNEI" in block
-    assert "ORNL cite" in block
-    assert "10.1/ornl" in block
-
-
-def test_source_citations_handles_empty_sources():
-    block = build_source_citations({})
-    assert "No sources discovered" in block
-
-
-def test_card_body_no_unrendered_template_literals():
-    """Catch the previous P1 bug: a literal `(if n_rows >= 0 ...)` rendered as text."""
-    body = build_card_body(
-        sources={"ORNL": {}}, n_cells=1, n_tests=3, n_rows=10000, per_source_block="x",
+def test_readme_to_card_body_strips_skip_and_comments():
+    """CARD:SKIP regions, HTML-comment markers, and blank-run collapse."""
+    sample = (
+        "# t\n\n"
+        "<!-- CARD:SKIP:START -->\nrepo-only\n<!-- CARD:SKIP:END -->\n\n"
+        "keep me\n\n"
+        "inline<!-- CARD:SKIP:START --> dropped<!-- CARD:SKIP:END --> tail\n"
     )
-    # If a Python conditional leaks into the rendered card, this string would appear.
-    assert "if n_rows >= 0" not in body
-    assert "if n_rows" not in body
-    # Sanity: numeric stats are formatted with thousand separators.
-    assert "10,000" in body
+    body = _readme_to_card_body(sample)
+    assert "repo-only" not in body
+    assert "dropped" not in body
+    assert "<!--" not in body
+    assert "keep me" in body
+    assert "inline tail" in body
+    assert "\n\n\n" not in body  # blank runs collapsed
 
 
-def test_full_dataset_card_assembles():
-    """End-to-end smoke: build_dataset_card() runs and emits non-empty markdown."""
+def test_dataset_table_lists_every_active_dataset():
+    """Each dataset discovered in the bundle gets a labelled row + the header.
+
+    data/harmonized/ is generated and not tracked, so skip when it's absent -
+    mirroring the rest of the suite's skip-if-no-bundle pattern.
+    """
+    datasets = collect_datasets(HARMONIZED)
+    if not datasets:
+        pytest.skip("No harmonized bundle - run demo_end_to_end.py first")
+    table = render_dataset_table(datasets)
+    assert "| Dataset | Cell model | Chemistry | Test types | Cells | License | DOI |" in table
+    for d in datasets:
+        assert d["label"] in table, f"dataset {d['label']!r} missing from table"
+
+
+def test_card_is_readme_minus_skip_plus_frontmatter():
+    """The card body must equal the (freshly-synced) README with skips removed."""
     card = build_dataset_card()
-    assert card.startswith("---")  # frontmatter
+    body = card.split("---", 2)[2].strip()
+    expected = _readme_to_card_body(sync_readme_text(README.read_text(), HARMONIZED)).strip()
+    assert body == expected
+
+
+def test_card_is_clean_and_complete():
+    """End-to-end smoke: frontmatter present, no leaked markers/badges/repo-only
+    sections, and the data-consumer sections survive."""
+    card = build_dataset_card()
+    assert card.startswith("---")                 # frontmatter
     assert "celljar" in card.lower()
-    assert "schemas" in card.lower()
-    assert len(card) > 500
+    # No leakage of repo-only / template artifacts.
+    assert "<!--" not in card
+    assert "CARD:SKIP" not in card
+    assert "shields.io" not in card
+    assert "pypi" not in card.lower()
+    assert "## Develop locally" not in card
+    assert "## Contributing" not in card
+    # Consumer-facing sections are present.
+    assert "## Datasets" in card
+    assert "## Query in place" in card
+    # All four schema entities are still named (sourced from the README schema block).
+    for entity in ("cell_metadata", "test_metadata", "timeseries", "cycle_summary"):
+        assert entity in card

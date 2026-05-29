@@ -1,0 +1,16 @@
+{
+  "source": "NAUMANN",
+  "manufacturer": "Sony-Murata",
+  "model_number": "US26650FTC1",
+  "chemistry": "LFP",
+  "cathode": "LFP",
+  "anode": "graphite",
+  "electrolyte": null,
+  "form_factor": "cylindrical",
+  "nominal_capacity_Ah": 3.0,
+  "nominal_voltage_V": 3.2,
+  "max_voltage_V": 3.6,
+  "min_voltage_V": 2.0,
+  "cell_id": "NAUMANN_CYC_T40_SOC50_D5_C1_C1",
+  "source_cell_id": "Testpoint Cyclization_40\u00b0C_50%SOC_5%DOD_1C_1C_CC"
+}

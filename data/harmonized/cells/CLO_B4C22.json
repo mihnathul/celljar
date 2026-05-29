@@ -1,0 +1,16 @@
+{
+  "cell_id": "CLO_B4C22",
+  "source": "CLO",
+  "source_cell_id": "b4c22",
+  "manufacturer": "A123 Systems",
+  "model_number": "APR18650M1A",
+  "chemistry": "LFP",
+  "cathode": "LFP",
+  "anode": "graphite",
+  "electrolyte": null,
+  "form_factor": "cylindrical",
+  "nominal_capacity_Ah": 1.1,
+  "nominal_voltage_V": 3.3,
+  "max_voltage_V": 3.6,
+  "min_voltage_V": 2.0
+}

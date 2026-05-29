@@ -1,0 +1,16 @@
+{
+  "source": "KOLLMEYER",
+  "manufacturer": "Samsung SDI",
+  "model_number": "INR21700-30T",
+  "chemistry": "NMC",
+  "cathode": "NMC",
+  "anode": "graphite",
+  "electrolyte": null,
+  "form_factor": "cylindrical",
+  "nominal_capacity_Ah": 3.0,
+  "nominal_voltage_V": 3.6,
+  "max_voltage_V": 4.2,
+  "min_voltage_V": 2.5,
+  "cell_id": "KOLLMEYER_30T_AGING_BC",
+  "source_cell_id": "INR21700-30T_BC"
+}

@@ -5,7 +5,7 @@
   "manufacturer": "AESC",
   "model_number": null,
   "chemistry": "mixed",
-  "cathode": null,
+  "cathode": "LMO/NCA",
   "anode": null,
   "electrolyte": null,
   "form_factor": "pouch",

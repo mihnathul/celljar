@@ -23,8 +23,8 @@ CELL_METADATA = {
     "source_cell_id": "2013_Nissan_Leaf",
     "manufacturer": "AESC",
     "model_number": None,
-    "chemistry": "mixed",                # AESC has not disclosed exact composition
-    "cathode": None,
+    "chemistry": "mixed",                # blended cathode; AESC never disclosed exact ratio
+    "cathode": "LMO/NCA",                 # widely-cited consensus blend (not officially disclosed)
     "anode": None,
     "electrolyte": None,
     "form_factor": "pouch",

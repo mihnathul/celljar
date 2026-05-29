@@ -1,0 +1,16 @@
+{
+  "source": "NASA_PCOE",
+  "manufacturer": "Unknown (NASA-undisclosed 18650 Li-ion)",
+  "model_number": null,
+  "chemistry": "LCO",
+  "cathode": null,
+  "anode": "graphite",
+  "electrolyte": null,
+  "form_factor": "cylindrical",
+  "nominal_capacity_Ah": 2.0,
+  "nominal_voltage_V": 3.7,
+  "max_voltage_V": 4.2,
+  "min_voltage_V": 2.7,
+  "cell_id": "NASA_PCOE_B0005",
+  "source_cell_id": "B0005"
+}

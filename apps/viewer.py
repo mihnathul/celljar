@@ -5,7 +5,7 @@
 Default: fetches metadata from HuggingFace; queries timeseries.parquet over
 HTTPS via DuckDB. Override env vars:
     CELLJAR_LOCAL=1               read from data/harmonized/
-    CELLJAR_HF_REVISION=v0.2.1    pin to a specific HF tag
+    CELLJAR_HF_REVISION=v0.3.0    pin to a specific HF tag
 
 Data access lives in apps/data.py; aging-plot helpers in apps/aging.py.
 """

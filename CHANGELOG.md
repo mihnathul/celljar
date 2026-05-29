@@ -7,7 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [0.3.0] - 2026-05-27
 
-- Added **KOLLMEYER 30T_AGING** source (6 Samsung INR21700-30T cells, 5 fast-charge protocols).
+- Added **KOLLMEYER** source (8 cells): 30T_AGING (6 Samsung INR21700-30T cells, 5 fast-charge protocols) plus 30T and HG2 beginning-of-life characterization (HPPC, drive cycles, qOCV, capacity check).
 - New schema fields: `checkup_id` (groups RPT checkup segments), `coulomb_count_observed_min/max_Ah` (measured charge throughput), `soc_method` + `resistance_method` (provenance tags), and a `qocv` test_type for C/20 sweeps.
 - `cycle_summary` is now strictly source-published - removed the V/I/T-derived rows (MATR / CLO / BILLS); per-cycle derivation belongs in downstream tools.
 - Viewer: per-DOI source links, cell-ID legends, aging plot updates, and a `CELLJAR_DEBUG=1` dev panel.

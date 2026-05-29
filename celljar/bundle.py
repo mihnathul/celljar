@@ -169,6 +169,163 @@ def validate_invariants(
                 )
 
 
+# --- Dataset table (single source of truth for the HF card AND the README) ---
+
+# Display label per dataset. The unit of a "dataset" is one published deposit
+# (one DOI); a single source can publish several (e.g. KOLLMEYER ships three:
+# 30T aging + 30T BoL + HG2 BoL). NASA PCoE has no DOI, so it is keyed by its
+# source name. Cell model, chemistry, test types, cell count, and license are
+# all derived from the bundle - only the human-friendly label is curated here.
+DATASET_LABELS = {
+    "10.5281/zenodo.2580327":    "ORNL Leaf 2013",
+    "10.17632/wykht8y7tg.1":     "HNEI 18650PF",
+    "10.1038/s41560-019-0356-8": "MATR (Severson 2019)",
+    "10.1038/s41586-020-1994-5": "CLO (Attia 2020)",
+    "10.1184/R1/14226830":       "BILLS eVTOL (Bills 2023)",
+    "NASA_PCOE":                 "NASA PCoE",
+    "10.17632/kxh42bfgtj.1":     "Naumann 2018/2020",
+    "10.5683/SP3/UYPYDJ":        "Kollmeyer 30T aging (Duque 2025)",
+    "10.17632/9xyvy2njj3.2":     "Kollmeyer 30T BoL",
+    "10.17632/cp3473x7xv.3":     "Kollmeyer HG2 BoL",
+}
+
+# Source render order (matches the README); rows fall back to alphabetical.
+_SOURCE_ORDER = ["ORNL", "HNEI", "MATR", "CLO", "BILLS", "NASA_PCOE", "NAUMANN", "KOLLMEYER"]
+
+# Manufacturer long-form -> short display name for the Cell model column.
+_MFG_SHORT = {
+    "A123 Systems": "A123", "Samsung SDI": "Samsung", "LG Chem": "LG",
+    "Sony-Murata": "Sony",
+}
+
+# Render order for the coarse test_type categories; C-rate capacity-check labels
+# (C2Discharge, C0p5Discharge, ...) - also first-class `test_type` values per the
+# schema - sort after, by their natural string order.
+_TEST_TYPE_ORDER = ["hppc", "qocv", "drive_cycle", "capacity_check", "cycle_aging", "calendar_aging"]
+
+
+def _format_model(mfg, model) -> str:
+    """Cell model from the `manufacturer` / `model_number` schema fields."""
+    short = _MFG_SHORT.get(mfg, mfg)
+    if model:
+        return model if str(model).startswith(short) else f"{short} {model}"
+    if mfg and mfg.startswith("Unknown"):
+        return "undisclosed"
+    return short or "-"
+
+
+def _format_test_types(raw: set) -> str:
+    """Actual `test_type` values as stored, coarse categories first."""
+    def rank(t):
+        return (_TEST_TYPE_ORDER.index(t) if t in _TEST_TYPE_ORDER else len(_TEST_TYPE_ORDER), t)
+    return ", ".join(f"`{t}`" for t in sorted(raw, key=rank)) if raw else "-"
+
+
+def collect_datasets(harmonized: Path) -> list[dict]:
+    """Group the bundle into datasets - one published deposit (one DOI) each.
+
+    NASA PCoE has no DOI, so it is keyed by its source name. A source can map to
+    several datasets (KOLLMEYER -> 30T aging + 30T BoL + HG2 BoL). Stub cells
+    (e.g. the Ecker placeholder) carry a cell record but no tests; the grouping
+    is test-driven, so they drop out automatically.
+
+    Returns a list of dicts (sorted for display) with keys: label, source, doi,
+    url, license, license_url, n_cells, models (set of (mfg, model)), chemistry
+    (set), test_types (set).
+    """
+    cells_dir = harmonized / "cells"
+    tests_dir = harmonized / "tests"
+    if not cells_dir.exists() or not tests_dir.exists():
+        return []
+
+    sources = collect_sources(harmonized)
+    cell_source: dict[str, str] = {}
+    cell_model: dict[str, tuple] = {}
+    cell_chem: dict[str, str] = {}
+    for p in cells_dir.glob("*.json"):
+        try:
+            cell = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        cid = cell.get("cell_id")
+        if cid:
+            cell_source[cid] = cell.get("source")
+            cell_model[cid] = (cell.get("manufacturer"), cell.get("model_number"))
+            cell_chem[cid] = cell.get("chemistry")
+
+    datasets: dict = {}
+    for p in tests_dir.glob("*.json"):
+        try:
+            t = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        cid = t.get("cell_id", "")
+        src = cell_source.get(cid) or next((s for s in sources if cid.startswith(s)), None)
+        if not src:
+            continue
+        doi = t.get("source_doi")
+        key = doi or src
+        d = datasets.setdefault(key, {
+            "source": src, "doi": doi,
+            "label": DATASET_LABELS.get(key) or DATASET_LABELS.get(src) or src,
+            "license": t.get("source_license"),
+            "license_url": t.get("source_license_url"),
+            "url": t.get("source_url"),
+            "cells": set(), "models": set(), "chemistry": set(), "test_types": set(),
+        })
+        d["cells"].add(cid)
+        if cid in cell_model:
+            d["models"].add(cell_model[cid])
+        if cell_chem.get(cid):
+            d["chemistry"].add(cell_chem[cid])
+        if t.get("test_type"):
+            d["test_types"].add(t["test_type"])
+
+    for d in datasets.values():
+        d["n_cells"] = len(d["cells"])
+
+    return sorted(
+        datasets.values(),
+        key=lambda d: (
+            _SOURCE_ORDER.index(d["source"]) if d["source"] in _SOURCE_ORDER else len(_SOURCE_ORDER),
+            -d["n_cells"], d["label"],
+        ),
+    )
+
+
+def render_dataset_table(datasets: list[dict]) -> str:
+    """One row per dataset: label, cell model, chemistry, test types, cell
+    count, license, DOI. Every column is a schema field (or derived from one);
+    all links are absolute, so the table renders identically on GitHub and HF."""
+    if not datasets:
+        return "_No datasets discovered in the harmonized bundle._"
+
+    rows = [
+        "| Dataset | Cell model | Chemistry | Test types | Cells | License | DOI |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for d in datasets:
+        models = " / ".join(_format_model(*m) for m in sorted(d["models"]))
+        chem = ", ".join(f"`{c}`" for c in sorted(d["chemistry"])) or "-"
+        test_types = _format_test_types(d["test_types"])
+        lic = d.get("license") or "see upstream"
+        lic_url = d.get("license_url")
+        lic_cell = f"[{lic}]({lic_url})" if lic_url else lic
+        doi = d.get("doi")
+        url = d.get("url")
+        if doi:
+            doi = str(doi)
+            doi_cell = f"[{doi}]({doi if doi.startswith('http') else 'https://doi.org/' + doi})"
+        elif url:
+            doi_cell = f"[dataset]({url})"
+        else:
+            doi_cell = "see upstream"
+        rows.append(
+            f"| {d['label']} | {models} | {chem} | {test_types} | {d['n_cells']} | {lic_cell} | {doi_cell} |"
+        )
+    return "\n".join(rows)
+
+
 def timeseries_row_count(harmonized: Path) -> int:
     """Row count in timeseries.parquet, or -1 if file missing / unreadable."""
     parquet = harmonized / "timeseries.parquet"
@@ -183,3 +340,44 @@ def timeseries_row_count(harmonized: Path) -> int:
             return pl.scan_parquet(parquet).select(pl.len()).collect().item()
         except Exception:                            # noqa: BLE001
             return -1
+
+
+# --- README <-> HF card sync -------------------------------------------------
+# The README is the single source of truth. The HF card is the README with the
+# repo-only sections stripped (examples/publish_to_huggingface.py) plus YAML
+# frontmatter. Two regions of the README are themselves generated from the
+# bundle and kept fresh by `python examples/sync_readme.py`:
+DATASETS_TABLE_START = "<!-- DATASETS_TABLE:START -->"
+DATASETS_TABLE_END = "<!-- DATASETS_TABLE:END -->"
+CONTENTS_START = "<!-- CONTENTS:START -->"
+CONTENTS_END = "<!-- CONTENTS:END -->"
+
+
+def render_contents_line(harmonized: Path) -> str:
+    """One-line totals: cell models, cells, tests, timeseries rows, datasets."""
+    ds = collect_datasets(harmonized)
+    n_datasets = len(ds)
+    n_cells = len({c for d in ds for c in d["cells"]})
+    n_models = len({m for d in ds for m in d["models"]})
+    n_tests = len(list((harmonized / "tests").glob("*.json")))
+    n_rows = timeseries_row_count(harmonized)
+    rows_str = f"~{round(n_rows / 1e6)}M" if n_rows >= 0 else "many"
+    return (f"Contents: {n_models} unique cell models, {n_cells} cells, "
+            f"{n_tests:,} tests, {rows_str} timeseries rows across {n_datasets} datasets (listed below).")
+
+
+def _splice(text: str, start: str, end: str, inner: str) -> str:
+    if start not in text or end not in text:
+        raise ValueError(f"markers {start} / {end} not found")
+    pre = text[: text.index(start) + len(start)]
+    post = text[text.index(end):]
+    return pre + inner + post
+
+
+def sync_readme_text(text: str, harmonized: Path) -> str:
+    """Refresh the generated regions of the README (datasets table + contents
+    line) from the bundle, leaving everything else untouched."""
+    text = _splice(text, DATASETS_TABLE_START, DATASETS_TABLE_END,
+                   f"\n{render_dataset_table(collect_datasets(harmonized))}\n")
+    text = _splice(text, CONTENTS_START, CONTENTS_END, render_contents_line(harmonized))
+    return text
