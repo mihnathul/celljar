@@ -59,7 +59,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("celljar - harmonized public battery test data")
+st.title("celljar - public battery datasets in one schema")
 _source_caption = (
     f"data: HuggingFace `{HF_REPO}` @ `{HF_REVISION}`"
     if not USE_LOCAL else
