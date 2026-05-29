@@ -7,7 +7,7 @@
 
 Public battery cell test datasets, harmonized into a canonical schema, with timeseries data in Parquet for easy query.
 
-celljar reads the raw datasets, normalizes them to a single canonical schema, preserves each author's citation and license, and publishes the result as Parquet + JSON. One set of queries then works across every source - no per-source loaders.
+Every research lab publishes cycler data in its own format, units, and sign conventions, so analyzing, comparing, or using data from more than one lab means writing a loader per source. celljar reads those raw datasets, normalizes them to one canonical schema, preserves each author's citation and license, and publishes the result as Parquet + JSON. Pull just the data you need, in one unified format.
 
 <!-- CONTENTS:START -->Contents: 8 unique cell models, 280 cells, 1,494 tests, ~184M timeseries rows across 10 datasets (listed below).<!-- CONTENTS:END -->
 
@@ -27,11 +27,9 @@ df = duckdb.sql("""
 """).df()
 ```
 
-Polars and pandas read the same URL via `pl.read_parquet` / `pd.read_parquet`. For the large `timeseries.parquet`, prefer DuckDB or Polars' lazy `scan_parquet(...).filter(...)` - those push the filter down over HTTP and fetch only matching row groups; a plain `read_parquet` downloads the whole file first.
+pandas, Polars, and the `datasets` library read the same URLs - see [Query in place](#query-in-place---no-download-needed) below, including filtered reads that fetch only matching row groups instead of the whole file.
 
 ## Datasets
-
-<!-- CARD:SKIP:START -->Table generated from the bundle by `python examples/refresh_readme_data.py` - don't hand-edit.<!-- CARD:SKIP:END -->
 
 <!-- DATASETS_TABLE:START -->
 | Dataset | Cell model | Chemistry | Test types | Cells | License | DOI |
