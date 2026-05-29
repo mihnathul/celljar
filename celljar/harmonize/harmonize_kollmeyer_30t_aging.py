@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import Iterable
 
 import numpy as np
 import polars as pl

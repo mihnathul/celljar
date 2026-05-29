@@ -25,14 +25,16 @@ from data import (
     load_cells, load_tests, load_timeseries, load_cycle_summary_for_tests,
 )
 
-# Check env directly so the dev panel works even if data.py is held by a
-# stale Streamlit module cache (only the top-level script auto-reloads on
-# save; imports do not).
-import os as _os
-_DEBUG = _os.environ.get("CELLJAR_DEBUG") == "1"
 from aging import build_aging_figure, resolve_per_test_axis
 from bundle import build_bundle_zip
 from plots import build_overlay_figure
+
+# Check env directly so the dev panel works even if data.py is held by a
+# stale Streamlit module cache (only the top-level script auto-reloads on
+# save; imports do not).
+import os as _os  # noqa: E402
+
+_DEBUG = _os.environ.get("CELLJAR_DEBUG") == "1"
 
 
 # --- Page setup ---
