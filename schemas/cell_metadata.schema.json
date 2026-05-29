@@ -11,7 +11,7 @@
     },
     "source": {
       "type": "string",
-      "enum": ["BILLS", "CLO", "ECKER", "HNEI", "MATR", "MOHTAT", "NAUMANN", "NASA_PCOE", "ORNL", "SNL_PREGER"],
+      "enum": ["BILLS", "CLO", "ECKER", "HNEI", "KOLLMEYER", "MATR", "MOHTAT", "NAUMANN", "NASA_PCOE", "ORNL", "SNL_PREGER"],
       "description": "Dataset source."
     },
     "source_cell_id": {"type": ["string", "null"], "description": "Identifier in the source dataset."},

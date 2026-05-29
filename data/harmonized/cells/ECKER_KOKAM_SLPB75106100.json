@@ -1,0 +1,16 @@
+{
+  "cell_id": "ECKER_KOKAM_SLPB75106100",
+  "source": "ECKER",
+  "source_cell_id": "Kokam_SLPB75106100",
+  "manufacturer": "Kokam",
+  "model_number": "SLPB75106100",
+  "chemistry": "NMC",
+  "cathode": "LiNi_{1/3}Mn_{1/3}Co_{1/3}O_2",
+  "anode": "graphite",
+  "electrolyte": null,
+  "form_factor": "pouch",
+  "nominal_capacity_Ah": 7.5,
+  "nominal_voltage_V": 3.7,
+  "max_voltage_V": 4.2,
+  "min_voltage_V": 2.8
+}

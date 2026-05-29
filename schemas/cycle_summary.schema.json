@@ -55,6 +55,11 @@
       "maximum": 100,
       "description": "SOC at which the DC pulse was applied. Naumann-style sources apply the pulse at a fixed checkup SOC."
     },
+    "resistance_method": {
+      "type": ["string", "null"],
+      "enum": ["source_published", null],
+      "description": "Provenance for resistance_dc_ohm: 'source_published' = the source originator publishes R_DC in their dataset (currently only NAUMANN); null = no R_DC for this row OR a downstream tool wrote one back (celljar itself never fits R_DC from V/I/T)."
+    },
     "energy_Wh": {
       "type": ["number", "null"],
       "minimum": 0,

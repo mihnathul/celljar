@@ -59,9 +59,13 @@ def build_overlay_figure(
     fig.update_yaxes(title_text="Voltage (V)", row=2, col=1)
     fig.update_yaxes(title_text="Temperature (°C)", row=3, col=1)
     fig.update_xaxes(title_text="time (s)", row=3, col=1)
+    # Transparent backgrounds so the plot inherits the Streamlit theme
+    # (light or dark) instead of pinning a dark panel that fights the app
+    # chrome. Previously plot_bgcolor was hardcoded to Streamlit's dark
+    # background (#0e1117), which made the overlay look dark in light mode.
     fig.update_layout(
         height=600, margin=dict(t=20), dragmode="zoom",
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(14,17,23,1)",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 

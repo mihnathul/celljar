@@ -35,9 +35,9 @@ for p in sorted(glob.glob("schemas/*.json")):
     print(f"  OK: {p}")
 PY
 
-echo "=== 5/5 package build (sdist + wheel) ==="
-python -m pip install --quiet --upgrade build
-python -m build --quiet
+echo "=== 5/5 README datasets table / contents in sync ==="
+python examples/refresh_readme_data.py --check
 
 echo
-echo "All checks passed. Ready to publish."
+echo "All checks passed. Ready to publish the dataset:"
+echo "  python examples/publish_to_huggingface.py --revision <tag>"

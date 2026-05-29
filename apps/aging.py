@@ -52,11 +52,28 @@ def build_aging_figure(
     selected: list[str],
     per_test_axis: dict,
 ) -> tuple[go.Figure, bool, bool, str]:
-    """Build a 2-row plotly figure: capacity (top) + DC resistance (bottom).
+    """Build the aging plot: capacity (top) + DC resistance (bottom IF the
+    selection has any R_DC data; otherwise just capacity).
 
     Returns (figure, plotted_capacity, plotted_resistance, x_label).
     """
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05)
+    # Decide layout up front: only allocate a resistance row if at least one
+    # selected test has resistance_dc_ohm in its cycle_summary (currently only
+    # NAUMANN). Otherwise render a single-panel capacity-only figure - cleaner
+    # than showing an empty annotated subplot every time.
+    has_any_resistance = False
+    for tid in selected:
+        if tid not in per_test_axis:
+            continue
+        sub = csum_df[csum_df["test_id"] == tid]
+        if "resistance_dc_ohm" in sub.columns and sub["resistance_dc_ohm"].notna().any():
+            has_any_resistance = True
+            break
+
+    if has_any_resistance:
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05)
+    else:
+        fig = make_subplots(rows=1, cols=1)
     palette = px.colors.qualitative.Plotly
     plotted_cap = False
     plotted_res = False
@@ -88,8 +105,9 @@ def build_aging_figure(
             if cap_label:
                 fig.update_yaxes(title_text=cap_label, row=1, col=1)
 
-        # DC resistance.
-        if "resistance_dc_ohm" in sub.columns and sub["resistance_dc_ohm"].notna().any():
+        # DC resistance - only added when the figure has a row 2.
+        if has_any_resistance and \
+           "resistance_dc_ohm" in sub.columns and sub["resistance_dc_ohm"].notna().any():
             fig.add_trace(
                 go.Scatter(
                     x=x_vals, y=sub["resistance_dc_ohm"],
@@ -104,14 +122,16 @@ def build_aging_figure(
             text="No capacity data", xref="x domain", yref="y domain",
             x=0.5, y=0.5, showarrow=False, row=1, col=1,
         )
-    if not plotted_res:
-        fig.add_annotation(
-            text="No DC resistance data", xref="x domain", yref="y domain",
-            x=0.5, y=0.5, showarrow=False, row=2, col=1,
-        )
-    fig.update_yaxes(title_text="DC resistance (Ω)", row=2, col=1)
-    fig.update_xaxes(title_text=x_label, row=2, col=1)
-    fig.update_layout(height=600, margin=dict(t=20))
+
+    fig.update_xaxes(title_text=x_label, showticklabels=True, row=1, col=1)
+    if has_any_resistance:
+        fig.update_yaxes(title_text="DC resistance (Ω)", row=2, col=1)
+        # shared_xaxes hides top-row ticks by default; force them on so the
+        # capacity panel keeps its tick labels.
+        fig.update_xaxes(title_text=x_label, showticklabels=True, row=2, col=1)
+        fig.update_layout(height=600, margin=dict(t=20))
+    else:
+        fig.update_layout(height=400, margin=dict(t=20))
 
     return fig, plotted_cap, plotted_res, x_label
 

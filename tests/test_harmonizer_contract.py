@@ -25,6 +25,8 @@ HARMONIZER_MODULES = [
     "celljar.harmonize.harmonize_snl_preger",
     "celljar.harmonize.harmonize_naumann",
     "celljar.harmonize.harmonize_ecker_2015",
+    "celljar.harmonize.harmonize_kollmeyer_30t",
+    "celljar.harmonize.harmonize_kollmeyer_hg2",
 ]
 
 REQUIRED_KEYS = {"cell_metadata", "cells_metadata", "test_metadata", "timeseries"}

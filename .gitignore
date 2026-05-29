@@ -44,24 +44,26 @@ data/raw/**/*.hdf5
 data/raw/**/*.zip
 data/raw/**/*.parquet
 data/raw/**/*.txt
+# Upstream docs / example scripts that ship with some deposits (Kollmeyer
+# 30T / HG2 PDFs, MATLAB live scripts, slide decks, download logs). Same
+# policy as the rest of data/raw: download-on-demand, not committed.
+data/raw/**/*.pdf
+data/raw/**/*.mlx
+data/raw/**/*.pptx
+data/raw/**/*.log
 
 # ORNL Leaf is the one bundled source — un-ignore its CSVs
 !data/raw/ornl_leaf/*.csv
 
-# Harmonized outputs — users regenerate locally via the demo, OR
-# download the full bundle from HuggingFace (huggingface.co/datasets/
-# mihnathul/celljar). Bundled exception: ORNL_LEAF and HNEI metadata
-# JSONs ship in the repo so a fresh clone has at least 2 sources of
-# example metadata to inspect without running the demo. The actual
-# timeseries / cycle_summary parquet files are NOT in git (too large —
-# 3+ GB regenerated; HF is the proper distribution).
-data/harmonized/cells/*.json
-data/harmonized/tests/*.json
+# Harmonized output is generated (examples/demo_end_to_end.py) and distributed
+# via HuggingFace. The JSON metadata (cells/, tests/) IS tracked so the whole
+# dataset is browsable on GitHub and the test suite runs without regenerating.
+# The Parquet payload (timeseries ~4 GB + cycle_summary) stays on HuggingFace -
+# every *.parquet is ignored repo-wide (see the rule further down). The generated
+# HF dataset card (README.md, written by publish_to_huggingface.py at publish
+# time) is not tracked either.
 data/harmonized/timeseries/
-!data/harmonized/cells/ORNL_LEAF_2013.json
-!data/harmonized/tests/ORNL_LEAF_2013_HPPC_*.json
-!data/harmonized/cells/HNEI_PANASONIC_18650PF.json
-!data/harmonized/tests/HNEI_PANASONIC_18650PF_HPPC_*.json
+data/harmonized/README.md
 
 # Other derived data
 data/params/

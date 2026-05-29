@@ -5,6 +5,15 @@ All notable changes to celljar are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-27
+
+- Added **KOLLMEYER** source (8 cells): 30T_AGING (6 Samsung INR21700-30T cells, 5 fast-charge protocols) plus 30T and HG2 beginning-of-life characterization (HPPC, drive cycles, qOCV, capacity check).
+- New schema fields: `checkup_id` (groups RPT checkup segments), `coulomb_count_observed_min/max_Ah` (measured charge throughput), `soc_method` + `resistance_method` (provenance tags), and a `qocv` test_type for C/20 sweeps.
+- `cycle_summary` is now strictly source-published - removed the V/I/T-derived rows (MATR / CLO / BILLS); per-cycle derivation belongs in downstream tools.
+- Viewer: per-DOI source links, cell-ID legends, aging plot updates, and a `CELLJAR_DEBUG=1` dev panel.
+- Fixed two viewer cache-invalidation bugs, a DuckDB/Parquet read incompatibility, and the NASA `cycle_summary` scaffold-no-append bug.
+- Scope: celljar harmonizes measurements - it does not fit R_DC / dV-dQ / OCV from V/I/T (that's downstream-pipeline). Source-published values ARE carried, tagged via `*_method` (e.g. Naumann's R_DC).
+
 ## [0.2.1] - 2026-04-25
 
 - Renamed `cellstore` → `celljar`.

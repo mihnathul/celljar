@@ -181,6 +181,9 @@ def _build_calendar(
             "resistance_dc_pulse_duration_s": _R_DC_PULSE_DURATION_S,
             # Calendar: pulse applied at the storage SOC (test-point SOC).
             "resistance_dc_soc_pct": float(soc_pct) if np.isfinite(soc_pct) else None,
+            "resistance_method": (
+                "source_published" if np.isfinite(resistance_ohm[i]) else None
+            ),
             "energy_Wh": None,
             "coulombic_efficiency": None,
             "temperature_C_mean": float(temp_c) if np.isfinite(temp_c) else None,
@@ -200,6 +203,7 @@ def _build_calendar(
         "soc_range_min": soc_frac,
         "soc_range_max": soc_frac,
         "soc_step": None,
+        "soc_method": "source_published",
         "c_rate_charge": None,
         "c_rate_discharge": None,
         "protocol_description": (
@@ -212,6 +216,7 @@ def _build_calendar(
         "soh_pct": None,
         "soh_method": None,
         "cycle_count_at_test": 0,
+        "checkup_id": None,
         "test_year": 2018,
         # No raw V/I/T - Naumann publishes only checkpoint aggregates.
         # Record 0 samples (as opposed to NaN) so the test_metadata pandera
@@ -228,6 +233,8 @@ def _build_calendar(
         "sample_dt_min_s": None,
         "sample_dt_median_s": None,
         "sample_dt_max_s": None,
+        "coulomb_count_observed_min_Ah": None,
+        "coulomb_count_observed_max_Ah": None,
         **_SOURCE_PROVENANCE,
     }
     return cell_meta, test_meta, rows
@@ -291,6 +298,9 @@ def _build_cycle(
             "resistance_dc_pulse_duration_s": _R_DC_PULSE_DURATION_S,
             # Cycle deposit: checkup pulse at 50% SOC by convention.
             "resistance_dc_soc_pct": _CYCLE_R_DC_SOC_PCT,
+            "resistance_method": (
+                "source_published" if np.isfinite(resistance_ohm[i]) else None
+            ),
             "energy_Wh": None,
             "coulombic_efficiency": None,
             "temperature_C_mean": float(temp_c) if np.isfinite(temp_c) else None,
@@ -338,6 +348,7 @@ def _build_cycle(
         "soc_range_min": soc_min,
         "soc_range_max": soc_max,
         "soc_step": None,
+        "soc_method": "source_published",
         "c_rate_charge": c_rate_chg if np.isfinite(c_rate_chg) else None,
         "c_rate_discharge": c_rate_dchg if np.isfinite(c_rate_dchg) else None,
         "protocol_description": proto,
@@ -345,6 +356,7 @@ def _build_cycle(
         "soh_pct": None,
         "soh_method": None,
         "cycle_count_at_test": 0,
+        "checkup_id": None,
         "test_year": 2018,
         # No raw V/I/T - Naumann publishes only checkpoint aggregates.
         # Record 0 samples (as opposed to NaN) so the test_metadata pandera
@@ -361,6 +373,8 @@ def _build_cycle(
         "sample_dt_min_s": None,
         "sample_dt_median_s": None,
         "sample_dt_max_s": None,
+        "coulomb_count_observed_min_Ah": None,
+        "coulomb_count_observed_max_Ah": None,
         **_SOURCE_PROVENANCE,
     }
     return cell_meta, test_meta, rows

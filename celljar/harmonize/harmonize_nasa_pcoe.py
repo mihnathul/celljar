@@ -223,10 +223,45 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             if df.height > 0:
                 ts_frames.append(df)
             cap = parsed.get("Capacity_Ah")
-            if cap is not None and np.isfinite(cap):
+            # NASA's last "discharge" is sometimes an EIS-only marker or aborted
+            # cycle with Capacity_Ah == 0.0, which is finite but not a real
+            # degradation point - drop these to keep the aging trajectory plot
+            # from cliff-diving to zero at end-of-test.
+            if cap is not None and np.isfinite(cap) and cap > 0.05:
                 if first_capacity_Ah is None:
                     first_capacity_Ah = float(cap)
                 last_capacity_Ah = float(cap)
+                amb_T = parsed.get("ambient_temperature_C")
+                # NASA's first-cycle BOL is unreliable on cells whose first
+                # discharge was aborted; cap retention at the schema's 150%
+                # bound and emit None when the BOL ratio would be implausible.
+                retention = (
+                    cap / first_capacity_Ah * 100.0
+                    if first_capacity_Ah > 0 else None
+                )
+                if retention is not None and retention > 150.0:
+                    retention = None
+                cycle_summary.append({
+                    "test_id": test_id,
+                    "cell_id": cell_id,
+                    "cycle_number": int(current_cycle),
+                    "equivalent_full_cycles": float(current_cycle),
+                    "elapsed_time_s": None,
+                    "capacity_Ah": float(cap),
+                    "capacity_retention_pct": (
+                        float(retention) if retention is not None else None
+                    ),
+                    "resistance_dc_ohm": None,
+                    "resistance_dc_pulse_duration_s": None,
+                    "resistance_dc_soc_pct": None,
+                    "resistance_method": None,
+                    "energy_Wh": None,
+                    "coulombic_efficiency": None,
+                    "temperature_C_mean": (
+                        float(amb_T)
+                        if amb_T is not None and np.isfinite(amb_T) else None
+                    ),
+                })
             last_was_discharge = True
 
         elif ctype == "impedance":
@@ -295,6 +330,7 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "soc_range_min": None,
             "soc_range_max": None,
             "soc_step": None,
+            "soc_method": None,
             "c_rate_charge": c_rate_chg,
             "c_rate_discharge": c_rate_dchg,
             "protocol_description": (
@@ -309,6 +345,7 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "soh_pct": soh_pct,
             "soh_method": soh_method,
             "cycle_count_at_test": 0,
+            "checkup_id": None,
             "test_year": 2008,
             "n_samples": int(len(ts_df)),
             "duration_s": float(ts_df["timestamp_s"].max() - ts_df["timestamp_s"].min()),
@@ -321,6 +358,10 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "sample_dt_min_s": float(max(0.0, np.min(dt))) if dt.size else None,
             "sample_dt_median_s": float(np.median(dt)) if dt.size else None,
             "sample_dt_max_s": float(np.max(dt)) if dt.size else None,
+            # NASA logs no running coulomb count (only a per-discharge scalar
+            # in cycle_summary) - timeseries coulomb_count_Ah is all-NaN.
+            "coulomb_count_observed_min_Ah": None,
+            "coulomb_count_observed_max_Ah": None,
             **_SOURCE_PROVENANCE,
         }
     else:
@@ -333,6 +374,7 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "soc_range_min": None,
             "soc_range_max": None,
             "soc_step": None,
+            "soc_method": None,
             "c_rate_charge": c_rate_chg,
             "c_rate_discharge": c_rate_dchg,
             "protocol_description": (
@@ -342,6 +384,7 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "soh_pct": soh_pct,
             "soh_method": soh_method,
             "cycle_count_at_test": 0,
+            "checkup_id": None,
             "test_year": 2008,
             "n_samples": 0,
             "duration_s": None,
@@ -354,6 +397,8 @@ def _harmonize_cell(cell_name: str, record: dict) -> tuple[dict, dict, pl.DataFr
             "sample_dt_min_s": None,
             "sample_dt_median_s": None,
             "sample_dt_max_s": None,
+            "coulomb_count_observed_min_Ah": None,
+            "coulomb_count_observed_max_Ah": None,
             **_SOURCE_PROVENANCE,
         }
 

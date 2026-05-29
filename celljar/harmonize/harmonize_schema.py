@@ -44,7 +44,7 @@ class CellMetadataSchema(pa.DataFrameModel):
     cell_id: str = pa.Field(nullable=False, unique=True)
     source: str = pa.Field(
         nullable=False,
-        isin=["BILLS", "CLO", "ECKER", "HNEI", "MATR", "MOHTAT", "NAUMANN", "NASA_PCOE", "ORNL", "SNL_PREGER"],
+        isin=["BILLS", "CLO", "ECKER", "HNEI", "KOLLMEYER", "MATR", "MOHTAT", "NAUMANN", "NASA_PCOE", "ORNL", "SNL_PREGER"],
     )
     source_cell_id: str = pa.Field(nullable=True)
     manufacturer: str = pa.Field(nullable=True)
@@ -81,14 +81,29 @@ class TestMetadataSchema(pa.DataFrameModel):
     cell_id: str = pa.Field(nullable=False)
     test_type: str = pa.Field(
         nullable=False,
-        isin=["cycle_aging", "hppc", "calendar_aging",
-              "drive_cycle", "capacity_check"],
+        str_matches=(
+            r"^(cycle_aging|hppc|qocv|calendar_aging|drive_cycle|capacity_check"
+            r"|C\d+(?:p\d+)?(?:Discharge|Charge|DischargeCharge))$"
+        ),
     )
     temperature_C_min: float = pa.Field(nullable=True)
     temperature_C_max: float = pa.Field(nullable=True)
     soc_range_min: float = pa.Field(nullable=True, ge=0, le=1)
     soc_range_max: float = pa.Field(nullable=True, ge=0, le=1)
     soc_step: float = pa.Field(nullable=True, ge=0, le=1)
+    # How soc_range_min / soc_range_max were determined. celljar persists only
+    # FACTS here, never values it computed from the timeseries:
+    #   protocol_asserted - hardcoded from the source's documented protocol
+    #                       (e.g. "HPPC sweeps 0..100%").
+    #   source_published - the source publishes per-test SOC setpoints in its
+    #                       own metadata (Naumann encodes SOC in the cell_id).
+    # Coulomb-count-derived SOC ranges are intentionally NOT persisted - a
+    # consumer who wants them derives from coulomb_count_Ah + capacity at
+    # query time. (See celljar's harmonize-don't-derive scope statement.)
+    soc_method: str = pa.Field(
+        nullable=True,
+        isin=["protocol_asserted", "source_published"],
+    )
     c_rate_charge: float = pa.Field(nullable=True, ge=0)
     c_rate_discharge: float = pa.Field(nullable=True, ge=0)
     protocol_description: str = pa.Field(nullable=True)
@@ -103,6 +118,12 @@ class TestMetadataSchema(pa.DataFrameModel):
     )
     # Polars has native nullable Int64 - bare `int` annotation + nullable=True suffices.
     cycle_count_at_test: int = pa.Field(nullable=True, ge=0)
+    # Optional grouping FK: multiple test records that belong to the same
+    # source-defined Reference Performance Test (RPT) block share a checkup_id.
+    # Currently used by Kollmeyer 30T_AGING where every ~30 aging cycles the
+    # cell undergoes a 5-7 segment characterization block (OCV, C/2, 1C, 2C,
+    # HPPC, ...). Null for sources whose tests don't bundle into RPTs.
+    checkup_id: str = pa.Field(nullable=True)
     # Year the test was actually run (not the paper publication year). Useful
     # for filtering by data recency and accounting for cell-vintage drift.
     test_year: int = pa.Field(nullable=True, ge=2000, le=2100)
@@ -129,6 +150,17 @@ class TestMetadataSchema(pa.DataFrameModel):
     sample_dt_min_s: float = pa.Field(nullable=True, ge=0)
     sample_dt_median_s: float = pa.Field(nullable=True, ge=0)
     sample_dt_max_s: float = pa.Field(nullable=True, ge=0)
+    # Observed range of the cycler's running coulomb count (signed ∫I dt, Ah).
+    # A MEASUREMENT, not a derivation - this is what the cycler logged. SOC
+    # range is intentionally NOT persisted (it needs a capacity assumption);
+    # a consumer derives SOC from these + a chosen capacity. Interpretation
+    # depends on the source's reset convention: some cyclers reset coulomb
+    # count per cycle (so for a multi-cycle cycle_aging test the min/max is the
+    # per-cycle swing, NOT lifetime throughput), others accumulate. Null for
+    # sources that don't log a running coulomb count (NASA scalar-only, Mohtat
+    # current-only, Naumann summary-only).
+    coulomb_count_observed_min_Ah: float = pa.Field(nullable=True)
+    coulomb_count_observed_max_Ah: float = pa.Field(nullable=True)
 
     class Config:
         coerce = True
@@ -210,6 +242,16 @@ class CycleSummarySchema(pa.DataFrameModel):
     resistance_dc_ohm: float = pa.Field(nullable=True, ge=0)
     resistance_dc_pulse_duration_s: float = pa.Field(nullable=True, ge=0)
     resistance_dc_soc_pct: float = pa.Field(nullable=True, ge=0, le=100)
+    # Provenance for resistance_dc_ohm, analogous to soh_method / soc_method.
+    #   source_published - source originator publishes R_DC in their dataset
+    #                      (currently only NAUMANN).
+    #   null - the row has no R_DC OR (future) a downstream tool fit one back
+    #          in from V/I/T. celljar itself never fits R_DC; that is
+    #          downstream-tool territory.
+    resistance_method: str = pa.Field(
+        nullable=True,
+        isin=["source_published"],
+    )
 
     # Other aggregated metrics.
     energy_Wh: float = pa.Field(nullable=True, ge=0)

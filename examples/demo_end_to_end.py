@@ -37,6 +37,9 @@ from celljar.ingest import mohtat as mohtat_ingest_mod
 from celljar.ingest import nasa_pcoe as nasa_pcoe_ingest_mod
 from celljar.ingest import snl_preger as snl_preger_ingest_mod
 from celljar.ingest import ecker_2015 as ecker_2015_ingest_mod
+from celljar.ingest import kollmeyer_30t as kollmeyer_30t_ingest_mod
+from celljar.ingest import kollmeyer_30t_aging as kollmeyer_30t_aging_ingest_mod
+from celljar.ingest import kollmeyer_hg2 as kollmeyer_hg2_ingest_mod
 from celljar.harmonize import harmonize_ornl_leaf as ornl_harm_mod
 from celljar.harmonize import harmonize_hnei as hnei_harm_mod
 from celljar.harmonize import harmonize_matr as matr_harm_mod
@@ -47,6 +50,9 @@ from celljar.harmonize import harmonize_mohtat as mohtat_harm_mod
 from celljar.harmonize import harmonize_nasa_pcoe as nasa_pcoe_harm_mod
 from celljar.harmonize import harmonize_snl_preger as snl_preger_harm_mod
 from celljar.harmonize import harmonize_ecker_2015 as ecker_2015_harm_mod
+from celljar.harmonize import harmonize_kollmeyer_30t as kollmeyer_30t_harm_mod
+from celljar.harmonize import harmonize_kollmeyer_30t_aging as kollmeyer_30t_aging_harm_mod
+from celljar.harmonize import harmonize_kollmeyer_hg2 as kollmeyer_hg2_harm_mod
 from celljar.harmonize.harmonize_schema import TimeseriesSchema, TestMetadataSchema
 from celljar.harmonize.harmonize_schema import CycleSummarySchema
 
@@ -134,6 +140,27 @@ SOURCES = [
         "harmonize": ecker_2015_harm_mod.harmonize,
         "capacity_Ah": 7.5,  # Kokam SLPB75106100 nominal
     },
+    {
+        "name": "KOLLMEYER_30T",
+        "raw_subdir": "KOLLMEYER_30T",
+        "ingest": kollmeyer_30t_ingest_mod.ingest,
+        "harmonize": kollmeyer_30t_harm_mod.harmonize,
+        "capacity_Ah": 3.0,  # Samsung INR21700-30T nominal
+    },
+    {
+        "name": "KOLLMEYER_30T_AGING",
+        "raw_subdir": "KOLLMEYER_30T_AGING",
+        "ingest": kollmeyer_30t_aging_ingest_mod.ingest,
+        "harmonize": kollmeyer_30t_aging_harm_mod.harmonize,
+        "capacity_Ah": 3.0,  # Samsung INR21700-30T nominal (six aged cells)
+    },
+    {
+        "name": "KOLLMEYER_HG2",
+        "raw_subdir": "KOLLMEYER_HG2",
+        "ingest": kollmeyer_hg2_ingest_mod.ingest,
+        "harmonize": kollmeyer_hg2_harm_mod.harmonize,
+        "capacity_Ah": 3.0,  # LG INR18650-HG2 nominal
+    },
 ]
 
 
@@ -210,7 +237,13 @@ for src, h in harmonized_per_source:
             json.dump(test_dict, f, indent=2, default=str)
     # Collect timeseries rows for the combined parquet
     all_timeseries.extend(h["timeseries"].values())
-    # Collect cycle_summary rows, if the harmonizer emits them
+    # Collect cycle_summary rows from sources whose ORIGINATOR publishes
+    # per-cycle / per-checkpoint aggregates - no V/I/T-derived rows here.
+    # Currently three sources qualify:
+    #   NAUMANN              - xlsx summary, no V/I/T shipped at all
+    #   KOLLMEYER 30T_AGING  - Borealis xlsx summary alongside V/I/T zips
+    #   NASA_PCoE            - per-discharge Capacity_Ah scalar attached to
+    #                          each cycle's .mat record by NASA's cycler
     if "cycle_summary" in h and h["cycle_summary"]:
         all_cycle_summary.extend(h["cycle_summary"])
 

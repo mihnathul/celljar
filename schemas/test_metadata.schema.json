@@ -9,13 +9,17 @@
     "cell_id": {"type": "string", "description": "FK to cells (one-to-many)."},
     "test_type": {
       "type": "string",
-      "enum": ["cycle_aging", "hppc", "calendar_aging", "drive_cycle", "capacity_check"]
+      "pattern": "^(cycle_aging|hppc|qocv|calendar_aging|drive_cycle|capacity_check|C\\d+(p\\d+)?(Discharge|Charge|DischargeCharge))$",
+      "description": "Coarse category (cycle_aging, hppc, qocv, calendar_aging, drive_cycle, capacity_check) OR a C-rate-aware capacity-check label of the form C{rate}{Discharge|Charge|DischargeCharge} (e.g. C2Discharge for a 2C constant-current discharge, C0p5Discharge for 0.5C). 'qocv' (quasi-OCV) tags low-rate sweeps (C/20 typical) used for OCV / dV-dQ / ICA characterization."
     },
     "temperature_C_min": {"type": ["number", "null"]},
     "temperature_C_max": {"type": ["number", "null"]},
     "soc_range_min": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "soc_range_max": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
     "soc_step": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "soc_method": {"type": ["string", "null"],
+                    "enum": ["protocol_asserted", "source_published", null],
+                    "description": "How soc_range_min/max were determined. celljar persists only facts, never values it computed from the timeseries: 'protocol_asserted' = hardcoded from the source's documented protocol (not verified from data); 'source_published' = the source publishes per-test SOC setpoints in its own metadata. Coulomb-count-derived SOC ranges are intentionally NOT persisted - derive them at query time from coulomb_count_Ah + capacity if needed."},
     "c_rate_charge": {"type": ["number", "null"], "minimum": 0},
     "c_rate_discharge": {"type": ["number", "null"], "minimum": 0},
     "protocol_description": {"type": ["string", "null"]},
@@ -28,6 +32,8 @@
                     "description": "How soh_pct was computed: 'bol_assumption' = stamped 100% because the test is a single fresh-cell characterization (ORNL, HNEI); 'capacity_vs_first_checkpoint' = CC discharge capacity normalized by the cell's first checkpoint; null when soh_pct itself is null."},
     "cycle_count_at_test": {"type": ["integer", "null"], "minimum": 0,
                              "description": "Aging cycles elapsed before this test. 0 = BOL (begin of life) / fresh cell characterization."},
+    "checkup_id": {"type": ["string", "null"],
+                    "description": "Optional grouping FK: multiple test records that belong to the same source-defined Reference Performance Test (RPT) block share a checkup_id. Currently used by KOLLMEYER 30T_AGING where every ~30 aging cycles the cell undergoes a 5-7 segment characterization block (OCV, C/2, 1C, 2C, HPPC, ...). Null for sources whose tests don't bundle into RPTs."},
     "test_year": {"type": ["integer", "null"], "minimum": 2000, "maximum": 2100,
                   "description": "Year the test was actually run (not the paper publication year). Useful for filtering by data recency and accounting for cell-vintage drift."},
 
@@ -57,7 +63,11 @@
     "sample_dt_median_s": {"type": ["number", "null"], "minimum": 0,
                            "description": "Observed: median dt between consecutive samples."},
     "sample_dt_max_s": {"type": ["number", "null"], "minimum": 0,
-                        "description": "Observed: maximum dt - large values flag sampling gaps."}
+                        "description": "Observed: maximum dt - large values flag sampling gaps."},
+    "coulomb_count_observed_min_Ah": {"type": ["number", "null"],
+                        "description": "Observed minimum of the cycler's running signed coulomb count (∫I dt, Ah) over the test. A measurement, not a derivation. SOC range is intentionally NOT persisted - derive it from this + a chosen capacity. Interpretation depends on the source's reset convention: some cyclers reset coulomb count per cycle (so for a multi-cycle cycle_aging test the range is the per-cycle swing, not lifetime throughput), others accumulate."},
+    "coulomb_count_observed_max_Ah": {"type": ["number", "null"],
+                        "description": "Observed maximum of the cycler's running signed coulomb count (∫I dt, Ah) over the test. See coulomb_count_observed_min_Ah."}
   },
   "required": ["test_id", "cell_id", "test_type"],
   "additionalProperties": false

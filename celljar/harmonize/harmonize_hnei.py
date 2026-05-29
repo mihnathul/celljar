@@ -113,6 +113,20 @@ def _normalise_key(key) -> tuple:
     raise ValueError(f"Unrecognised HNEI ingest key: {key!r}")
 
 
+def _capacity_check_test_type(profile: str) -> str:
+    """Map HNEI capacity_check profile → semantic test_type.
+
+    HNEI profiles:
+      OCV_C20  → C/20 sweep, tagged `qocv` (quasi-OCV; for OCV + dV-dQ + IC)
+      Dis1C    → 1C constant-current discharge capacity check
+    """
+    if profile == "OCV_C20":
+        return "qocv"
+    if profile == "Dis1C":
+        return "C1Discharge"
+    return "capacity_check"
+
+
 def _build_test_id(test_type: str, profile: str, temp_c: int, idx: int | None) -> str:
     """Build a deterministic test_id.
 
@@ -120,7 +134,8 @@ def _build_test_id(test_type: str, profile: str, temp_c: int, idx: int | None) -
     HPPC (variant):        `HNEI_PANASONIC_18650PF_HPPC_DIS5_10P_25C`
     Drive cycles:          `HNEI_PANASONIC_18650PF_DRIVE_CYCLE_UDDS_25C`
     Cycling / aging:       `HNEI_PANASONIC_18650PF_CYCLE_AGING_25C_1`
-    Capacity check:        `HNEI_PANASONIC_18650PF_CAP_CHECK_OCV_C20_25C`
+    qOCV sweep:            `HNEI_PANASONIC_18650PF_qOCV_C20_25C`
+    Capacity check (CC):   `HNEI_PANASONIC_18650PF_CAP_CHECK_DIS1C_25C`
     Checkup:               `HNEI_PANASONIC_18650PF_CHECKUP_CHARGE_25C`
     Repeated runs get an `_<idx>` suffix (e.g. HWFTa vs HWFTb → _1 / _2).
     """
@@ -138,7 +153,12 @@ def _build_test_id(test_type: str, profile: str, temp_c: int, idx: int | None) -
     elif test_type == "cycle_aging":
         test_id = f"{base}_CYCLE_AGING_{temp_tag}"
     elif test_type == "capacity_check":
-        test_id = f"{base}_CAP_CHECK_{profile.upper()}_{temp_tag}"
+        # C/20 sweep is quasi-OCV (used for OCV + dV/dQ + IC, not capacity).
+        # Dis1C stays CAP_CHECK because it's a true capacity check.
+        if profile == "OCV_C20":
+            test_id = f"{base}_qOCV_C20_{temp_tag}"
+        else:
+            test_id = f"{base}_CAP_CHECK_{profile.upper()}_{temp_tag}"
     else:
         test_id = f"{base}_{test_type.upper()}_{profile.upper()}_{temp_tag}"
 
@@ -172,6 +192,8 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 2.9) -> dict:
         temp_c = int(data.get("temperature_C", temp_c))
 
         test_id = _build_test_id(test_type, profile, temp_c, idx)
+        if test_type == "capacity_check":
+            test_type = _capacity_check_test_type(profile)
         raw = data["raw_df"]
         # Accept either pandas or polars raw_df.
         if not isinstance(raw, pl.DataFrame):
@@ -196,11 +218,11 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 2.9) -> dict:
             _step_type_expr(),
         ])
 
-        # Compute SOC internally (only for test_metadata.soc_range_*).
-        # NOT added to the timeseries DataFrame - SOC is consumer-derived
-        # from `coulomb_count_Ah` + cell's reference capacity + chosen initial SOC.
-        soc = np.clip(1.0 + df["coulomb_count_Ah"].to_numpy() / capacity_Ah, 0, 1)
-
+        # SOC range is NOT persisted. It would have to be computed from
+        # coulomb_count_Ah / nominal capacity with an initial-SOC=1.0 guess
+        # and a [0,1] clip - a derived value, not a measurement. Per celljar's
+        # harmonize-don't-derive policy we leave soc_range_* null; a consumer
+        # who wants it derives it from the timeseries themselves.
         timeseries_by_test[test_id] = df
 
         sample_dt = np.diff(df["timestamp_s"].to_numpy())
@@ -228,9 +250,10 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 2.9) -> dict:
             "test_type": test_type,
             "temperature_C_min": float(temp_c),
             "temperature_C_max": float(temp_c),
-            "soc_range_min": float(soc.min()),
-            "soc_range_max": float(soc.max()),
+            "soc_range_min": None,
+            "soc_range_max": None,
             "soc_step": soc_step,
+            "soc_method": None,
             "c_rate_charge": None,
             "c_rate_discharge": c_rate_discharge,
             "protocol_description": protocol_description,
@@ -238,6 +261,7 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 2.9) -> dict:
             "soh_pct": 100.0,                        # BOL assumption - fresh cell
             "soh_method": "bol_assumption",
             "cycle_count_at_test": 0,
+            "checkup_id": None,
             "test_year": 2017,
             # Observed data summary
             "n_samples": int(len(df)),
@@ -251,6 +275,14 @@ def harmonize(ingested_data: dict, capacity_Ah: float = 2.9) -> dict:
             "sample_dt_min_s": float(max(0.0, np.min(sample_dt))) if len(sample_dt) else None,
             "sample_dt_median_s": float(np.median(sample_dt)) if len(sample_dt) else None,
             "sample_dt_max_s": float(np.max(sample_dt)) if len(sample_dt) else None,
+            "coulomb_count_observed_min_Ah": (
+                float(np.nanmin(df["coulomb_count_Ah"].to_numpy()))
+                if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+            ),
+            "coulomb_count_observed_max_Ah": (
+                float(np.nanmax(df["coulomb_count_Ah"].to_numpy()))
+                if np.isfinite(df["coulomb_count_Ah"].to_numpy()).any() else None
+            ),
             **_SOURCE_PROVENANCE,
         })
 
