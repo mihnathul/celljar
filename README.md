@@ -11,7 +11,7 @@ celljar reads the raw datasets, normalizes them to a single canonical schema, pr
 
 <!-- CONTENTS:START -->Contents: 8 unique cell models, 280 cells, 1,494 tests, ~184M timeseries rows across 10 datasets (listed below).<!-- CONTENTS:END -->
 
-![celljar viewer](https://raw.githubusercontent.com/mihnathul/celljar/main/docs/CellJarViewer.png)
+![celljar viewer](docs/CellJarViewer.png)
 
 > Scope: celljar harmonizes MEASUREMENTS. It converts units, normalizes the schema, and preserves provenance. It does NOT fit R_DC, dV/dQ, OCV, or ECM parameters from V/I/T - that is downstream work: fit it with your own code, or an open-source tool (PyBOP, equivalent-circuit-model, and others). Values a source publishes itself ARE carried, tagged via `*_method`.
 
@@ -31,7 +31,7 @@ Polars and pandas read the same URL via `pl.read_parquet` / `pd.read_parquet`. F
 
 ## Datasets
 
-Every column is a schema field (or derived from one): `manufacturer` + `model_number` (cell model), `chemistry`, `test_type`, cell count, `source_license`, `source_doi`. C-rate `test_type` labels (e.g. `C2Discharge`) are schema-valid capacity-check categories.<!-- CARD:SKIP:START --> This table and the HuggingFace card are both generated from the bundle by `python examples/sync_readme.py`.<!-- CARD:SKIP:END -->
+<!-- CARD:SKIP:START -->Table generated from the bundle by `python examples/refresh_readme_data.py` - don't hand-edit.<!-- CARD:SKIP:END -->
 
 <!-- DATASETS_TABLE:START -->
 | Dataset | Cell model | Chemistry | Test types | Cells | License | DOI |
@@ -48,26 +48,17 @@ Every column is a schema field (or derived from one): `manufacturer` + `model_nu
 | Kollmeyer HG2 BoL | LG INR18650HG2 | `NMC` | `hppc`, `drive_cycle`, `C0p5Discharge`, `C1DischargeCharge`, `C20DischargeCharge`, `C2Discharge` | 1 | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) | [10.17632/cp3473x7xv.3](https://doi.org/10.17632/cp3473x7xv.3) |
 <!-- DATASETS_TABLE:END -->
 
-ORNL Leaf ships in the repo; every other dataset is download-on-demand (raw files under `data/raw/<source>/`, see each `SOURCE_DATA_PROVENANCE.md`) or via the HuggingFace bundle.
-
-## Files
-
-```
-cells/*.json              # one file per cell (hardware metadata)
-tests/*.json              # one file per test (protocol + provenance + observed stats)
-timeseries.parquet        # all tests' V/I/T samples; join on test_id
-cycle_summary.parquet     # per-cycle aggregates (aging studies); join on (test_id, cycle_number)
-```
+Only ORNL Leaf's raw data ships in the repo. For the other datasets you fetch the raw files yourself from the original source (each `data/raw/<source>/SOURCE_DATA_PROVENANCE.md` has the link and steps) and regenerate - or skip raw entirely and use the already-harmonized bundle on HuggingFace.
 
 ## Schema
 
 Four entities, joined by `cell_id` / `test_id` (and `checkup_id` where present):
 
 ```
-cell_metadata.json      hardware: chemistry, capacity, form factor
-test_metadata.json      protocol, SOH, provenance, license, checkup_id
-timeseries.parquet      V / I / T per-sample + signed running coulomb count (∫I dt)
-cycle_summary.parquet   source-published per-cycle aggregates (capacity, R_DC, ...)
+cell_metadata   cells/*.json           one JSON per cell: chemistry, capacity, form factor
+test_metadata   tests/*.json           one JSON per test: protocol, SOH, provenance, license, checkup_id
+timeseries      timeseries.parquet     V / I / T per sample + signed coulomb count (∫I dt); join on test_id
+cycle_summary   cycle_summary.parquet  source-published per-cycle aggregates (capacity, R_DC, ...)
 ```
 
 Conventions: SI units, relative timestamps, missing data is explicit `null`. Current is normalized to one canonical sign across every source: positive = charge (into the cell), negative = discharge.
@@ -147,6 +138,26 @@ celljar sits alongside, not in place of, the other tools in this space:
 - [BatteryLife](https://github.com/Ruifeng-Tan/BatteryLife) / [BatteryML](https://github.com/microsoft/BatteryML) - cycling-to-failure ML benchmark (KDD 2025). Optimized for lifetime-prediction ML; celljar keeps the full V/I/T timeseries that physics-based parameterization (ECM/SPM/DFN) needs.
 
 <!-- CARD:SKIP:START -->
+## Architecture
+
+```
+data/raw/<source>/     raw inputs (ORNL bundled; others you fetch from the source)
+       |
+       v
+celljar/ingest/        per-source readers: native .mat / .csv / .xlsx -> arrays
+celljar/harmonize/     per-source harmonizers: map onto the canonical schema,
+       |               validated against schemas/*.schema.json (Pandera)
+       v
+data/harmonized/       the bundle: cells/*.json, tests/*.json, *.parquet
+       |
+       +--> examples/publish_to_huggingface.py -> HuggingFace dataset + card
+       +--> apps/viewer.py                      -> Streamlit viewer
+```
+
+- `schemas/` is the canonical contract (JSON Schema); `celljar/harmonize/harmonize_schema.py` mirrors it as Pandera models for runtime validation.
+- Adding a source = one reader in `celljar/ingest/` + one `celljar/harmonize/harmonize_<source>.py`. Everything downstream (bundle, viewer, card) is source-agnostic.
+- `examples/`: `demo_end_to_end.py` regenerates the bundle, `publish_to_huggingface.py` publishes it, `refresh_readme_data.py` refreshes this README's generated table + counts.
+
 ## Develop locally
 
 ```bash

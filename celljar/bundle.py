@@ -346,7 +346,7 @@ def timeseries_row_count(harmonized: Path) -> int:
 # The README is the single source of truth. The HF card is the README with the
 # repo-only sections stripped (examples/publish_to_huggingface.py) plus YAML
 # frontmatter. Two regions of the README are themselves generated from the
-# bundle and kept fresh by `python examples/sync_readme.py`:
+# bundle and kept fresh by `python examples/refresh_readme_data.py`:
 DATASETS_TABLE_START = "<!-- DATASETS_TABLE:START -->"
 DATASETS_TABLE_END = "<!-- DATASETS_TABLE:END -->"
 CONTENTS_START = "<!-- CONTENTS:START -->"
@@ -374,7 +374,7 @@ def _splice(text: str, start: str, end: str, inner: str) -> str:
     return pre + inner + post
 
 
-def sync_readme_text(text: str, harmonized: Path) -> str:
+def refresh_readme_data(text: str, harmonized: Path) -> str:
     """Refresh the generated regions of the README (datasets table + contents
     line) from the bundle, leaving everything else untouched."""
     text = _splice(text, DATASETS_TABLE_START, DATASETS_TABLE_END,

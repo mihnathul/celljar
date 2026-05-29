@@ -100,7 +100,7 @@ from celljar.bundle import (   # noqa: E402
     collect_sources as _collect_sources_impl,
     timeseries_row_count as _timeseries_row_count_impl,
     collect_datasets as _collect_datasets_impl,
-    sync_readme_text,
+    refresh_readme_data,
 )
 
 
@@ -140,6 +140,10 @@ source_datasets:
 _CARD_SKIP = re.compile(r"<!-- CARD:SKIP:START -->.*?<!-- CARD:SKIP:END -->", re.DOTALL)
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _BLANK_RUN = re.compile(r"\n{3,}")
+# Relative image links (e.g. the README screenshot) render on GitHub but break
+# on HuggingFace - rewrite them to absolute raw.githubusercontent URLs.
+_REL_IMAGE = re.compile(r"(!\[[^\]]*\]\()(?!https?://)([^)]+)(\))")
+_RAW_BASE = GH_REPO.replace("https://github.com/", "https://raw.githubusercontent.com/") + "/main/"
 
 
 def _readme_to_card_body(readme: str) -> str:
@@ -147,11 +151,13 @@ def _readme_to_card_body(readme: str) -> str:
 
     Strips every <!-- CARD:SKIP:START -->...<!-- CARD:SKIP:END --> region
     (badges, Develop locally, Contributing), drops the now-empty HTML-comment
-    markers (incl. the generated-region markers), and collapses the blank-line
-    runs they leave behind.
+    markers (incl. the generated-region markers), absolutizes relative image
+    links (the README keeps them relative so GitHub renders them on any branch),
+    and collapses the blank-line runs they leave behind.
     """
     body = _CARD_SKIP.sub("", readme)
     body = _HTML_COMMENT.sub("", body)
+    body = _REL_IMAGE.sub(lambda m: f"{m.group(1)}{_RAW_BASE}{m.group(2)}{m.group(3)}", body)
     body = _BLANK_RUN.sub("\n\n", body)
     return body.strip()
 
@@ -166,7 +172,7 @@ def build_dataset_card() -> str:
     active = {d["source"] for d in _collect_datasets_impl(HARMONIZED)}
     sources = {s: v for s, v in sources.items() if s in active}
 
-    readme = sync_readme_text(README.read_text(), HARMONIZED)
+    readme = refresh_readme_data(README.read_text(), HARMONIZED)
     return f"{build_frontmatter(sources)}\n\n{_readme_to_card_body(readme)}"
 
 

@@ -26,7 +26,7 @@ from publish_to_huggingface import (  # noqa: E402
     build_frontmatter,
     _readme_to_card_body,
 )
-from celljar.bundle import collect_datasets, render_dataset_table, sync_readme_text  # noqa: E402
+from celljar.bundle import collect_datasets, render_dataset_table, refresh_readme_data  # noqa: E402
 
 
 def test_frontmatter_is_valid_yaml():
@@ -75,7 +75,7 @@ def test_card_is_readme_minus_skip_plus_frontmatter():
     """The card body must equal the (freshly-synced) README with skips removed."""
     card = build_dataset_card()
     body = card.split("---", 2)[2].strip()
-    expected = _readme_to_card_body(sync_readme_text(README.read_text(), HARMONIZED)).strip()
+    expected = _readme_to_card_body(refresh_readme_data(README.read_text(), HARMONIZED)).strip()
     assert body == expected
 
 

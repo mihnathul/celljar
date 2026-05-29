@@ -36,7 +36,7 @@ for p in sorted(glob.glob("schemas/*.json")):
 PY
 
 echo "=== 5/5 README datasets table / contents in sync ==="
-python examples/sync_readme.py --check
+python examples/refresh_readme_data.py --check
 
 echo
 echo "All checks passed. Ready to publish the dataset:"
