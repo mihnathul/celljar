@@ -53,7 +53,7 @@ dependencies = [
 dev = [
     "deptry>=0.20",
     "pytest>=8.0",
-    "ruff>=0.3",
+    "ruff>=0.15.16",
 ]
 viewer = [
     "streamlit>=1.20",
