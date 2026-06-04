@@ -46,7 +46,7 @@ dependencies = [
     "pandera>=0.18",          # runtime dataframe validation
     "numpy>=1.26",
     "scipy>=1.12",            # HNEI .mat
-    "h5py>=3.8",              # MATR .mat (MATLAB v7.3 / HDF5)
+    "h5py>=3.14.0",              # MATR .mat (MATLAB v7.3 / HDF5)
 ]
 
 [project.optional-dependencies]
